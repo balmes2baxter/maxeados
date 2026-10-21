@@ -126,6 +126,14 @@ CREATE TABLE submissions (
 * Evidencia: `evidence_path` (archivo en bucket privado `evidence/{user_id}/...`) o `evidence_url` (link externo).
 * Vista `leaderboard`: mejor puntaje aprobado por máquina, suma global, máquinas completadas, `qualified` y desempate por menor peso.
 * RLS: el atleta solo ve/crea sus intentos; el admin ve y modera todo.
+* `profiles.avatar` (jsonb): personaje pixel art. `onboarded` exige nombre, peso **y** personaje.
+* Vista `activity_feed`: últimos intentos aprobados (sin video) para el ticker del gym.
+* Funciones de juez: `verify_weight(user, kg)` (verifica y recalcula la temporada) y `open_season(...)` (cierra la activa y abre otra).
+
+### 🕹️ Experiencia pixel art y gamificación
+* Toda la UI es pixel art: personajes de gym dibujados píxel a píxel (contextura, piel, pelo, barba, ropa, tenis, gorra/bandana/audífonos, gafas, cadena, cinturón, muñequeras), sprites de las 6 máquinas, íconos, fuentes *Press Start 2P* + *VT323*, sonidos 8-bit opcionales y animaciones suaves.
+* Al entrar con Google lo primero es **crear el personaje** (obligatorio), luego la ficha con peso.
+* XP por enviar (+10), aprobar (+50 + 20×puntaje), récord personal (+25), circuito completo (+200) y pesaje verificado (+30). Niveles con títulos, ligas por puntaje (Bronce → Diamante), 10 logros, misiones, rachas, *level up* y toasts de logros.
 
 ### Estructura del proyecto
 ```
@@ -135,14 +143,27 @@ src/
 │   ├── client.ts               # cliente navegador (subida directa a Storage)
 │   ├── server.ts               # cliente Server Components / Actions
 │   └── proxy.ts                # lógica de sesión + redirecciones
+├── lib/
+│   ├── avatar.ts               # motor del personaje pixel art
+│   ├── game.ts                 # XP, niveles, ligas, logros, misiones, rachas
+│   ├── scoring.ts              # fórmula P_m (preview en cliente; la oficial es el trigger)
+│   └── data.ts / session.ts    # lecturas de Supabase y guardas de sesión
+├── actions/                    # Server Actions (onboarding, intentos, juez, auth)
+├── components/                 # PixelAvatar, PixelIcon, MachineSprite, creador, fx...
 └── app/
-    ├── login/                  # Login con Google
+    ├── login/                  # Portada + login con Google (y modo desarrollo)
     ├── auth/callback/          # Intercambio OAuth code → sesión
-    ├── onboarding/             # Perfil obligatorio (peso corporal)
-    └── page.tsx                # Dashboard del atleta
+    ├── onboarding/             # Personaje obligatorio + ficha con peso
+    └── (app)/
+        ├── page.tsx            # Gym: liga, pozo, circuito, misiones, logros
+        ├── maquinas/           # Catálogo y envío de intento (video a Storage o link)
+        ├── ranking/            # Podio + tabla en vivo con desglose
+        ├── perfil/             # Nivel, logros, datos y editor de personaje
+        └── juez/               # Cola, pesos, historial y temporadas
 supabase/
-├── migrations/                 # Esquema, triggers, RLS, leaderboard, bucket
-└── seed.sql                    # 6 máquinas + temporada piloto
+├── migrations/                 # Esquema, triggers, RLS, leaderboard, bucket, capa de juego
+├── seed.sql                    # 6 máquinas + temporada piloto
+└── seed_demo.sql               # SOLO local: juez + 8 atletas demo
 ```
 
 ### Roadmap MVP
@@ -151,10 +172,11 @@ supabase/
 | 1 | Scaffold Next.js + Supabase | ✅ |
 | 2 | Esquema DB + score por trigger + RLS + Storage | ✅ |
 | 3 | Login Google + onboarding con peso (HU-01) | ✅ |
-| 4 | Catálogo de máquinas (HU-02) | 🔨 |
-| 5 | Subir intento con video/foto a Storage (HU-03) | ⏳ |
-| 6 | Leaderboard en tiempo real (HU-04) | ⏳ |
-| 7 | Panel juez: cola PENDING, aprobar/rechazar, verificar peso (HU-05/06) | ⏳ |
+| 4 | Catálogo de máquinas (HU-02) | ✅ |
+| 5 | Subir intento con video/foto a Storage (HU-03) | ✅ |
+| 6 | Leaderboard en tiempo real (HU-04) | ✅ |
+| 7 | Panel juez: cola PENDING, aprobar/rechazar, verificar peso (HU-05/06) | ✅ |
+| 7b | Personaje pixel art obligatorio + gamificación | ✅ |
 | 8 | Deploy en Vercel + PWA instalable | ⏳ |
 
 ---
@@ -189,3 +211,14 @@ update public.profiles set role = 'ADMIN' where email = 'tu-correo@gmail.com';
 ```bash
 npm run dev
 ```
+
+### Alternativa: todo local (sin cuenta de Supabase ni Google)
+```bash
+npx supabase start        # requiere Docker; aplica migraciones + seed.sql + seed_demo.sql
+# .env.local con el API URL y anon key que imprime, más:
+# NEXT_PUBLIC_DEV_LOGIN=true
+npm run dev
+```
+En `/login` aparece **Modo desarrollo**: entra con cualquier correo (se crea la cuenta) o con `juez@maxeados.dev` para el panel de juez. Los atletas demo son `valentina@demo.maxeados`, `andres@demo.maxeados`, etc. No actives `NEXT_PUBLIC_DEV_LOGIN` en producción.
+
+`npm test` corre las pruebas de la fórmula de puntaje.
