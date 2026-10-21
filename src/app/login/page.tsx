@@ -7,7 +7,11 @@ import { GoogleButton } from "./google-button";
 import { DevLogin } from "./dev-login";
 import { isDevLoginEnabled } from "@/lib/devLogin";
 
-export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { error } = await searchParams;
   const crowd = Array.from({ length: 10 }, () => randomAvatar());
 
