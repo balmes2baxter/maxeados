@@ -68,8 +68,18 @@ export default async function LoginPage({
 
       <section className="mt-6 flex flex-col gap-3">
         {error && <p className="anim-shake px-box p-3 text-center text-xl text-danger">No pudimos iniciar sesión. Intenta de nuevo.</p>}
-        {/* En local no hace falta Google: se entra con correo contra el Supabase local. */}
-        {isDevLoginEnabled() ? <DevLogin /> : <GoogleButton />}
+        {/* En local no hace falta Google: se entra con correo contra el Supabase. */}
+        {isDevLoginEnabled() ? (
+          <div className="flex flex-col gap-3">
+            <DevLogin />
+            <div className="relative my-1 text-center">
+              <span className="font-pixel text-[8px] text-muted">─ O CON GOOGLE ─</span>
+            </div>
+            <GoogleButton />
+          </div>
+        ) : (
+          <GoogleButton />
+        )}
         <p className="text-center text-base text-muted">Al continuar aceptas las reglas de la temporada.</p>
       </section>
 
