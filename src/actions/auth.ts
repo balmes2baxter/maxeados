@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isDevLoginEnabled } from "@/lib/devLogin";
 
 export type AuthState = { error?: string } | undefined;
 
@@ -9,7 +10,7 @@ export type AuthState = { error?: string } | undefined;
 const DEV_PASSWORD = "maxeados-dev";
 
 export async function signInDev(_: AuthState, formData: FormData): Promise<AuthState> {
-  if (process.env.NEXT_PUBLIC_DEV_LOGIN !== "true") return { error: "Modo desarrollo desactivado" };
+  if (!isDevLoginEnabled()) return { error: "El login local está desactivado" };
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Correo inválido" };

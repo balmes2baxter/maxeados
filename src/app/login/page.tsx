@@ -5,6 +5,7 @@ import { randomAvatar } from "@/lib/avatar";
 import { MACHINE_SLUGS } from "@/lib/machineSprite";
 import { GoogleButton } from "./google-button";
 import { DevLogin } from "./dev-login";
+import { isDevLoginEnabled } from "@/lib/devLogin";
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { error } = await searchParams;
@@ -63,8 +64,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
       <section className="mt-6 flex flex-col gap-3">
         {error && <p className="anim-shake px-box p-3 text-center text-xl text-danger">No pudimos iniciar sesión. Intenta de nuevo.</p>}
-        <GoogleButton />
-        {process.env.NEXT_PUBLIC_DEV_LOGIN === "true" && <DevLogin />}
+        {/* En local no hace falta Google: se entra con correo contra el Supabase local. */}
+        {isDevLoginEnabled() ? <DevLogin /> : <GoogleButton />}
         <p className="text-center text-base text-muted">Al continuar aceptas las reglas de la temporada.</p>
       </section>
 

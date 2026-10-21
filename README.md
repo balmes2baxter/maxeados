@@ -212,13 +212,13 @@ update public.profiles set role = 'ADMIN' where email = 'tu-correo@gmail.com';
 npm run dev
 ```
 
-### Alternativa: todo local (sin cuenta de Supabase ni Google)
+### Alternativa: todo local, sin Google ni cuenta de Supabase
 ```bash
+npm install
 npx supabase start        # requiere Docker; aplica migraciones + seed.sql + seed_demo.sql
-# .env.local con el API URL y anon key que imprime, más:
-# NEXT_PUBLIC_DEV_LOGIN=true
-npm run dev
+npm run setup:local       # escribe .env.local con la URL y la anon key locales
+npm run dev               # http://localhost:3000
 ```
-En `/login` aparece **Modo desarrollo**: entra con cualquier correo (se crea la cuenta) o con `juez@maxeados.dev` para el panel de juez. Los atletas demo son `valentina@demo.maxeados`, `andres@demo.maxeados`, etc. No actives `NEXT_PUBLIC_DEV_LOGIN` en producción.
+Cuando la app apunta a un Supabase local (`127.0.0.1`), `/login` muestra **Entrar en local** en lugar de Google: escribe cualquier correo y se crea la cuenta. Accesos rápidos: atleta nuevo, `valentina@demo.maxeados` (demo con datos) y `juez@maxeados.dev` (panel de juez). Contra un Supabase en la nube solo aparece Google. `NEXT_PUBLIC_DEV_LOGIN=true|false` fuerza el comportamiento.
 
 `npm test` corre las pruebas de la fórmula de puntaje.
