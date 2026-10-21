@@ -1,4 +1,5 @@
-// Prepara el entorno local: escribe .env.local con la URL y la anon key del Supabase local.
+// Prepara el entorno local: escribe .env.development.local con la URL y la anon key del Supabase local.
+// En `npm run dev` ese archivo tiene prioridad sobre .env.local (que apunta al Supabase en la nube).
 // Uso: npx supabase start && npm run setup:local
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +20,7 @@ if (!url || !anon) {
   process.exit(1);
 }
 
-const file = ".env.local";
+const file = ".env.development.local";
 if (existsSync(file) && !readFileSync(file, "utf8").includes("127.0.0.1")) {
   console.error(`✖ ${file} ya existe y no apunta a Supabase local. Renómbralo si quieres generar uno nuevo.`);
   process.exit(1);

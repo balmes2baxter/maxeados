@@ -216,7 +216,7 @@ npm run dev
 ```bash
 npm install
 npx supabase start        # requiere Docker; aplica migraciones + seed.sql + seed_demo.sql
-npm run setup:local       # escribe .env.local con la URL y la anon key locales
+npm run setup:local       # escribe .env.development.local con la URL y la anon key locales
 npm run dev               # http://localhost:3000
 ```
 Cuando la app apunta a un Supabase local (`127.0.0.1`), `/login` muestra **Entrar en local** en lugar de Google: escribe cualquier correo y se crea la cuenta. Accesos rápidos: atleta nuevo, `valentina@demo.maxeados` (demo con datos) y `juez@maxeados.dev` (panel de juez). Contra un Supabase en la nube solo aparece Google. `NEXT_PUBLIC_DEV_LOGIN=true|false` fuerza el comportamiento.
