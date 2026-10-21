@@ -127,6 +127,36 @@ CREATE TABLE submissions (
 * Vista `leaderboard`: mejor puntaje aprobado por máquina, suma global, máquinas completadas, `qualified` y desempate por menor peso.
 * RLS: el atleta solo ve/crea sus intentos; el admin ve y modera todo.
 
+### Estructura del proyecto
+```
+src/
+├── proxy.ts                    # Next 16 proxy: refresca sesión y protege rutas
+├── lib/supabase/
+│   ├── client.ts               # cliente navegador (subida directa a Storage)
+│   ├── server.ts               # cliente Server Components / Actions
+│   └── proxy.ts                # lógica de sesión + redirecciones
+└── app/
+    ├── login/                  # Login con Google
+    ├── auth/callback/          # Intercambio OAuth code → sesión
+    ├── onboarding/             # Perfil obligatorio (peso corporal)
+    └── page.tsx                # Dashboard del atleta
+supabase/
+├── migrations/                 # Esquema, triggers, RLS, leaderboard, bucket
+└── seed.sql                    # 6 máquinas + temporada piloto
+```
+
+### Roadmap MVP
+| Fase | Alcance | Estado |
+|------|---------|--------|
+| 1 | Scaffold Next.js + Supabase | ✅ |
+| 2 | Esquema DB + score por trigger + RLS + Storage | ✅ |
+| 3 | Login Google + onboarding con peso (HU-01) | ✅ |
+| 4 | Catálogo de máquinas (HU-02) | 🔨 |
+| 5 | Subir intento con video/foto a Storage (HU-03) | ⏳ |
+| 6 | Leaderboard en tiempo real (HU-04) | ⏳ |
+| 7 | Panel juez: cola PENDING, aprobar/rechazar, verificar peso (HU-05/06) | ⏳ |
+| 8 | Deploy en Vercel + PWA instalable | ⏳ |
+
 ---
 
 ## 🛠️ Setup local
