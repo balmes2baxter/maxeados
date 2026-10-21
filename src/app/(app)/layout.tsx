@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { requireAthlete } from "@/lib/session";
 import { getPlayerState } from "@/lib/data";
 import { PixelAvatar } from "@/components/PixelAvatar";
@@ -7,9 +8,20 @@ import { PixelIcon } from "@/components/PixelIcon";
 import { BottomNav } from "@/components/BottomNav";
 import { FxListener, ProgressWatcher } from "@/components/FxListener";
 import { SoundToggle } from "@/components/SoundToggle";
+import { PixelLoader } from "@/components/PixelLoader";
 
+// Con cacheComponents la sesión se lee en la petición: el shell autenticado va dentro de un Suspense
+// y cada página tiene su propio loading.tsx para las navegaciones entre pestañas.
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<PixelLoader />}>
+      <AppShell>{children}</AppShell>
+    </Suspense>
+  );
+}
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+async function AppShell({ children }: { children: React.ReactNode }) {
+  await connection();
   const user = await requireAthlete();
   const st = await getPlayerState(user);
   const unlocked = st.badges.filter((b) => b.unlocked).map((b) => b.id);

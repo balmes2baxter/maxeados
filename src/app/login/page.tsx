@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
 import { PixelAvatar } from "@/components/PixelAvatar";
 import { PixelIcon } from "@/components/PixelIcon";
 import { MachineSprite } from "@/components/MachineSprite";
@@ -7,14 +9,27 @@ import { GoogleButton } from "./google-button";
 import { DevLogin } from "./dev-login";
 import { isDevLoginEnabled } from "@/lib/devLogin";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { error } = await searchParams;
+// El desfile es aleatorio en cada visita, así que se renderiza en la petición dentro de su Suspense;
+// el resto de la portada queda en el shell estático.
+async function AthleteParade() {
+  await connection();
   const crowd = Array.from({ length: 10 }, () => randomAvatar());
+  return (
+    <div className="anim-marquee flex w-max gap-6">
+      {[...crowd, ...crowd].map((a, i) => (
+        <PixelAvatar key={i} avatar={a} size={78} pose={i % 4 === 0 ? "flex" : "idle"} />
+      ))}
+    </div>
+  );
+}
 
+async function LoginError({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+  if (!error) return null;
+  return <p className="anim-shake px-box p-3 text-center text-xl text-danger">No pudimos iniciar sesión. Intenta de nuevo.</p>;
+}
+
+export default function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-8">
       <header className="anim-rise text-center">
@@ -27,11 +42,9 @@ export default async function LoginPage({
 
       {/* Desfile de atletas */}
       <div className="relative mt-6 overflow-hidden py-2" aria-hidden>
-        <div className="anim-marquee flex w-max gap-6">
-          {[...crowd, ...crowd].map((a, i) => (
-            <PixelAvatar key={i} avatar={a} size={78} pose={i % 4 === 0 ? "flex" : "idle"} />
-          ))}
-        </div>
+        <Suspense fallback={<div className="h-[90px]" />}>
+          <AthleteParade />
+        </Suspense>
         <div className="h-2 bg-line" />
       </div>
 
@@ -67,7 +80,9 @@ export default async function LoginPage({
       </div>
 
       <section className="mt-6 flex flex-col gap-3">
-        {error && <p className="anim-shake px-box p-3 text-center text-xl text-danger">No pudimos iniciar sesión. Intenta de nuevo.</p>}
+        <Suspense>
+          <LoginError searchParams={searchParams} />
+        </Suspense>
         {/* En local no hace falta Google: se entra con correo contra el Supabase local. */}
         {isDevLoginEnabled() ? <DevLogin /> : <GoogleButton />}
         <p className="text-center text-base text-muted">Al continuar aceptas las reglas de la temporada.</p>
