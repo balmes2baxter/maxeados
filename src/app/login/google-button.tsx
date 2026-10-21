@@ -8,6 +8,12 @@ export function GoogleButton() {
 
   async function signIn() {
     setLoading(true);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl || supabaseUrl.includes("placeholder")) {
+      setLoading(false);
+      alert("⚠️ Falta configurar tus credenciales de Supabase en .env.local (NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY)");
+      return;
+    }
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
