@@ -1,6 +1,6 @@
 # Maxeados 🏋️‍♂️💥
 
-Plataforma de competencia fitness y fuerza relativa para gimnasios. Los atletas compiten por llevar las máquinas al tope de la pila de placas (*maxear*) y disputar un pozo mensual de **$30 USD (~120.000 COP)**, bajo un algoritmo matemático equitativo que normaliza el rendimiento según el peso corporal del usuario.
+Plataforma de competencia fitness y fuerza relativa para gimnasios. Los atletas compiten por llevar las máquinas al tope de la pila de placas (*maxear*) y disputar un pozo mensual de **$100.000 COP**, bajo un algoritmo matemático equitativo que normaliza el rendimiento según el peso corporal del usuario.
 
 ---
 
@@ -88,7 +88,7 @@ CREATE TABLE machines (
 CREATE TABLE seasons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(100) NOT NULL,
-    prize_amount_usd NUMERIC(6,2) DEFAULT 30.00,
+    prize_amount_cop NUMERIC(10,2) DEFAULT 100000.00,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     is_active BOOLEAN DEFAULT TRUE
