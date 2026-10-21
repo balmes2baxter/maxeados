@@ -62,6 +62,8 @@ $$\text{Puntaje Global} = \sum_{m=1}^{6} P_m^*$$
 
 ## 🗄️ Esquema de Base de Datos (PostgreSQL)
 
+> Esquema conceptual. La fuente de verdad es [`supabase/migrations`](supabase/migrations).
+
 ```sql
 -- Usuarios y Perfiles
 CREATE TABLE users (
@@ -112,8 +114,48 @@ CREATE TABLE submissions (
 
 ---
 
-## 🚀 Arquitectura y Tecnologías Propuestas
+## 🚀 Stack
 
-* **Stack Fullstack:** Next.js (App Router, React 19 / TypeScript, Tailwind CSS) o API Node/Express + Frontend React Vite.
-* **Base de Datos:** PostgreSQL con Prisma ORM o Drizzle ORM.
-* **Diseño UI:** Mobile-first con modo oscuro / estética gym de alto contraste (Dark mode, acentos fluorescentes/dorados, badges de estado).
+* **Next.js 16** (App Router, TypeScript, Tailwind CSS v4) — mobile-first.
+* **Supabase**: PostgreSQL + Auth (Google OAuth) + Storage (videos/fotos de evidencia).
+* Migraciones SQL versionadas en [`supabase/migrations`](supabase/migrations) y datos iniciales en [`supabase/seed.sql`](supabase/seed.sql).
+
+### Decisiones de la base de datos
+* `users` → `profiles` (1:1 con `auth.users`), creado automáticamente al primer login con Google.
+* `reps_counted`, `calculated_score`, snapshots de peso y temporada los calcula un **trigger** en Postgres: el cliente no puede falsear su puntaje.
+* Evidencia: `evidence_path` (archivo en bucket privado `evidence/{user_id}/...`) o `evidence_url` (link externo).
+* Vista `leaderboard`: mejor puntaje aprobado por máquina, suma global, máquinas completadas, `qualified` y desempate por menor peso.
+* RLS: el atleta solo ve/crea sus intentos; el admin ve y modera todo.
+
+---
+
+## 🛠️ Setup local
+
+```bash
+npm install
+cp .env.example .env.local   # completar con URL y anon key de Supabase
+```
+
+### 1. Base de datos en Supabase
+```bash
+npx supabase login
+npx supabase link --project-ref <tu-project-ref>
+npx supabase db push                 # aplica supabase/migrations
+# Seed: pegar supabase/seed.sql en el SQL Editor (ajustar pesos tope reales)
+```
+
+### 2. Login con Google
+1. Google Cloud Console → *APIs & Services → Credentials* → crear **OAuth Client ID (Web)**.
+   * Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+2. Supabase → *Authentication → Providers → Google*: pegar Client ID y Secret.
+3. Supabase → *Authentication → URL Configuration*: agregar `http://localhost:3000/auth/callback` en Redirect URLs.
+
+### 3. Convertirte en Juez/Admin
+```sql
+update public.profiles set role = 'ADMIN' where email = 'tu-correo@gmail.com';
+```
+
+### 4. Correr
+```bash
+npm run dev
+```
