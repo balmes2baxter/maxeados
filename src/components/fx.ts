@@ -79,9 +79,12 @@ const SONGS: Record<string, [number, number, number][]> = {
   error: [[220, 0, 0.15], [165, 0.15, 0.3]],
 };
 
+import { duckBgm } from "@/lib/bgm";
+
 export function sfx(name: keyof typeof SONGS) {
   if (typeof window === "undefined" || isMuted()) return;
   try {
+    duckBgm(0.6);
     ctx ??= new AudioContext();
     if (ctx.state === "suspended") void ctx.resume();
     for (const [f, s, d] of SONGS[name]) tone(f, s, d);

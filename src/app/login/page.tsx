@@ -1,5 +1,6 @@
 import { PixelAvatar } from "@/components/PixelAvatar";
 import { PixelIcon } from "@/components/PixelIcon";
+import { SoundToggle } from "@/components/SoundToggle";
 import { randomAvatar, seededRandom } from "@/lib/avatar";
 import { GoogleButton } from "./google-button";
 import { DevLogin } from "./dev-login";
@@ -17,7 +18,10 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ er
   const crowd = Array.from({ length: 10 }, (_, i) => randomAvatar(seededRandom(i * 7919 + 3)));
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-8">
+    <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-8">
+      <div className="absolute right-4 top-4 z-20">
+        <SoundToggle />
+      </div>
       <header className="anim-rise text-center">
         <p className="font-pixel text-[10px] text-gold">★ LIGA DE FUERZA RELATIVA ★</p>
         <h1 className="font-pixel text-shadow-px anim-glow mt-4 text-[34px] leading-tight text-neon" style={{ ["--glow" as string]: "#39ff14" }}>
