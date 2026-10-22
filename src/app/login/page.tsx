@@ -48,8 +48,18 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ er
         <Suspense>
           <LoginError searchParams={searchParams} />
         </Suspense>
-        {/* En local no hace falta Google: se entra con correo contra el Supabase local. */}
-        {isDevLoginEnabled() ? <DevLogin /> : <GoogleButton />}
+        {/* Con el login de desarrollo activo se puede entrar con correo o con Google. */}
+        {isDevLoginEnabled() ? (
+          <div className="flex flex-col gap-3">
+            <DevLogin />
+            <div className="relative my-1 text-center">
+              <span className="font-pixel text-[8px] text-muted">─ O CON GOOGLE ─</span>
+            </div>
+            <GoogleButton />
+          </div>
+        ) : (
+          <GoogleButton />
+        )}
       </section>
 
     </main>
