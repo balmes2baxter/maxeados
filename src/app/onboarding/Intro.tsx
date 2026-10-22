@@ -54,7 +54,7 @@ function Barbell({ up }: { up: boolean }) {
 }
 
 export function Intro({ prize, onDone }: { prize: string; onDone: () => void }) {
-  const [phase, setPhase] = useState(0);
+  const [phase, setPhase] = useState(1); // Arranca directamente visible para evitar pantalla negra en móvil
   const crowd = useMemo(() => Array.from({ length: 14 }, (_, i) => randomAvatar(seededRandom(i * 104729 + 11))), []);
 
   useEffect(() => {
@@ -144,10 +144,13 @@ export function Intro({ prize, onDone }: { prize: string; onDone: () => void }) 
 
       {phase < 7 && (
         <button
-          className="font-pixel absolute right-3 top-[max(12px,env(safe-area-inset-top))] mt-2 px-2 py-1 text-[9px] text-muted"
-          onClick={onDone}
+          className="font-pixel absolute right-3 top-[max(12px,env(safe-area-inset-top))] mt-2 z-50 rounded border border-gold/40 bg-night/90 px-3 py-1.5 text-[10px] text-gold shadow-lg active:scale-95 cursor-pointer"
+          onClick={() => {
+            sfx("select");
+            onDone();
+          }}
         >
-          Saltar ▸▸
+          Saltar intro ▸▸
         </button>
       )}
     </div>
