@@ -19,14 +19,13 @@ export type Profile = {
 
 export const getCurrentUser = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims.sub;
+  if (!userId) return null;
   const { data } = await supabase
     .from("profiles")
     .select("id, full_name, email, phone, avatar_url, avatar, body_weight_kg, weight_verified, role, onboarded")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
   return (data as Profile | null) ?? null;
 });
@@ -36,7 +35,8 @@ export type Athlete = Profile & { full_name: string; body_weight_kg: number; ava
 /** Usuario con sesión, personaje y peso; si no, lo manda a donde corresponde. */
 export async function requireAthlete(): Promise<Athlete> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // Sin perfil = sin sesión o sesión huérfana: se limpia la cookie (si no, proxy y página se rebotan en bucle).
+  if (!user) redirect("/auth/salir");
   if (!user.onboarded) redirect("/onboarding");
   return user as Athlete;
 }

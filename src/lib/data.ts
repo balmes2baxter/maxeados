@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Athlete } from "@/lib/session";
 import type { Avatar } from "@/lib/avatar";
+import type { ShopItem } from "@/lib/shop";
 import {
   computeBadges,
   computeQuests,
@@ -29,6 +30,10 @@ export type Season = {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  gym_name: string | null;
+  gym_lat: number | null;
+  gym_lng: number | null;
+  gym_radius_m: number;
 };
 
 export type SubmissionStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -121,6 +126,7 @@ export type UserSubmission = {
   status: SubmissionStatus;
   repsCompleted: number;
   repsCounted: number;
+  liftedKg: number;
   score: number;
   evidenceUrl: string | null;
   evidencePath: string | null;
@@ -132,12 +138,12 @@ export async function getUserSubmissions(userId: string, seasonId: string): Prom
   const supabase = await createClient();
   const { data } = await supabase
     .from("submissions")
-    .select("id, machine_id, status, reps_completed, reps_counted, calculated_score, evidence_url, evidence_path, admin_notes, created_at, machines(slug, name)")
+    .select("id, machine_id, status, reps_completed, reps_counted, lifted_weight_kg, calculated_score, evidence_url, evidence_path, admin_notes, created_at, machines(slug, name)")
     .eq("user_id", userId)
     .eq("season_id", seasonId)
     .order("created_at", { ascending: false });
   type Row = {
-    id: string; machine_id: string; status: SubmissionStatus; reps_completed: number; reps_counted: number;
+    id: string; machine_id: string; status: SubmissionStatus; reps_completed: number; reps_counted: number; lifted_weight_kg: number;
     calculated_score: number; evidence_url: string | null; evidence_path: string | null; admin_notes: string | null;
     created_at: string; machines: { slug: string; name: string } | null;
   };
@@ -149,6 +155,7 @@ export async function getUserSubmissions(userId: string, seasonId: string): Prom
     status: r.status,
     repsCompleted: r.reps_completed,
     repsCounted: r.reps_counted,
+    liftedKg: Number(r.lifted_weight_kg),
     score: Number(r.calculated_score),
     evidenceUrl: r.evidence_url,
     evidencePath: r.evidence_path,
@@ -199,16 +206,17 @@ export async function getRecentActivity(seasonId: string, limit = 10) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("activity_feed")
-    .select("id, full_name, machine_name, reps_completed, calculated_score, reviewed_at")
+    .select("id, full_name, machine_name, reps_completed, calculated_score, reviewed_at, lifted_weight_kg")
     .eq("season_id", seasonId)
     .order("reviewed_at", { ascending: false, nullsFirst: false })
     .limit(limit);
-  type Row = { id: string; full_name: string | null; machine_name: string; reps_completed: number; calculated_score: number };
+  type Row = { id: string; full_name: string | null; machine_name: string; reps_completed: number; calculated_score: number; lifted_weight_kg: number };
   return ((data as Row[] | null) ?? []).map((r) => ({
     id: r.id,
     name: r.full_name ?? "Atleta",
     machine: r.machine_name,
     reps: r.reps_completed,
+    kg: Number(r.lifted_weight_kg),
     score: Number(r.calculated_score),
   }));
 }
@@ -225,3 +233,38 @@ export function shortName(name: string) {
 export function machineShort(name: string) {
   return name.split(" ")[0];
 }
+
+/** Mejor marca aprobada (peso × reps) por máquina, a partir de los intentos del atleta. */
+export function bestLifts(subs: UserSubmission[]): Record<string, { kg: number; reps: number; score: number }> {
+  const out: Record<string, { kg: number; reps: number; score: number }> = {};
+  for (const s of subs) {
+    if (s.status !== "APPROVED") continue;
+    if (!out[s.machineId] || s.score > out[s.machineId].score) out[s.machineId] = { kg: s.liftedKg, reps: s.repsCompleted, score: s.score };
+  }
+  return out;
+}
+
+export function gymReady(season: Season | null) {
+  return !!season && season.gym_lat !== null && season.gym_lng !== null;
+}
+
+export function formatKg(n: number) {
+  return `${Number.isInteger(n) ? n : n.toFixed(1)} kg`;
+}
+
+/** Tienda: catálogo, lo que ya compró el atleta y sus fichas. */
+export const getShop = cache(async (userId: string) => {
+  const supabase = await createClient();
+  const [{ data: items }, { data: owned }, { data: balance }] = await Promise.all([
+    supabase.from("shop_items").select("id, name, price").order("sort_order"),
+    supabase.from("purchases").select("item_id").eq("user_id", userId),
+    supabase.rpc("coin_balance", { p_user: userId }),
+  ]);
+  const ownedSet = new Set(((owned as { item_id: string }[] | null) ?? []).map((o) => o.item_id));
+  const catalog = ((items as ShopItem[] | null) ?? []).map((i) => ({ ...i, owned: ownedSet.has(i.id) }));
+  return {
+    items: catalog,
+    balance: Number(balance ?? 0),
+    locked: catalog.filter((i) => !i.owned).map((i) => ({ id: i.id, price: i.price })),
+  };
+});

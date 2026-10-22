@@ -2,7 +2,7 @@
 
 // Efectos imperativos: confeti pixel, textos flotantes, toasts y sonidos 8-bit.
 
-const COLORS = ["#39ff14", "#ffd700", "#ff3ea5", "#00e5ff", "#ff6b1a", "#f2f2f2"];
+const COLORS = ["#39ff14", "#ffd700", "#f2f2f2", "#2bd10f", "#e6b800"];
 
 export function confetti(count = 70) {
   if (typeof document === "undefined") return;

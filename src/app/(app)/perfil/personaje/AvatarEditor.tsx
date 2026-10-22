@@ -8,15 +8,15 @@ import type { Avatar } from "@/lib/avatar";
 
 function SaveButton() {
   const { pending } = useFormStatus();
-  return <button className="px-btn px-btn-gold w-full" disabled={pending}>{pending ? "Guardando..." : "Guardar personaje"}</button>;
+  return <button className="px-btn w-full" disabled={pending}>{pending ? "Guardando..." : "Guardar personaje"}</button>;
 }
 
-export function AvatarEditor({ initial }: { initial: Avatar }) {
+export function AvatarEditor({ initial, locked }: { initial: Avatar; locked: { id: string; price: number }[] }) {
   const [avatar, setAvatar] = useState(initial);
   return (
     <form action={saveAvatar} className="flex flex-col gap-3">
       <input type="hidden" name="avatar" value={JSON.stringify(avatar)} />
-      <CharacterCreator value={avatar} onChange={setAvatar} />
+      <CharacterCreator value={avatar} onChange={setAvatar} locked={locked} />
       <SaveButton />
     </form>
   );

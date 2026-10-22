@@ -61,8 +61,8 @@ export const TIERS = [
   { name: "Bronce", min: 0, color: "#cd7f32" },
   { name: "Plata", min: 6, color: "#c0c0c0" },
   { name: "Oro", min: 10, color: "#ffd700" },
-  { name: "Platino", min: 14, color: "#00e5ff" },
-  { name: "Diamante", min: 18, color: "#ff3ea5" },
+  { name: "Platino", min: 14, color: "#d9dde8" },
+  { name: "Diamante", min: 18, color: "#9fe3ff" },
 ] as const;
 
 export function tierFor(score: number) {

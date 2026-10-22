@@ -34,7 +34,7 @@ export function VideoEmbed({ url, kind }: { url: string; kind?: string | null })
     return <video src={url} controls preload="metadata" className="aspect-video w-full bg-ink" />;
   }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="flex aspect-video w-full items-center justify-center bg-ink text-xl text-cyan hover:underline">
+    <a href={url} target="_blank" rel="noreferrer" className="flex aspect-video w-full items-center justify-center bg-ink text-xl text-bone underline-offset-4 hover:underline">
       ▶ Abrir video en otra pestaña
     </a>
   );

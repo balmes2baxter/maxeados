@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, requireAthlete, requireJudge } from "@/lib/session";
 import { parseAvatar } from "@/lib/avatar";
-import { getActiveSeason, seasonOpen } from "@/lib/data";
+import { getActiveSeason, getShop, gymReady, seasonOpen } from "@/lib/data";
+import { stripLocked } from "@/lib/shop";
+import { isDevLoginEnabled } from "@/lib/devLogin";
+import { distanceM, formatDistance } from "@/lib/geo";
 
 export type FormState = { error?: string } | undefined;
 
@@ -22,12 +25,16 @@ function readProfile(
   return { data: { full_name: fullName, phone, body_weight_kg: Math.round(weight * 100) / 100 } };
 }
 
-function readAvatar(formData: FormData) {
+/** Lee el personaje del formulario y le quita lo premium que no se ha comprado. */
+async function readAvatar(formData: FormData, userId: string) {
+  let avatar;
   try {
-    return parseAvatar(JSON.parse(String(formData.get("avatar") ?? "{}")));
+    avatar = parseAvatar(JSON.parse(String(formData.get("avatar") ?? "{}")));
   } catch {
-    return parseAvatar({});
+    avatar = parseAvatar({});
   }
+  const shop = await getShop(userId);
+  return stripLocked(avatar, shop.locked.map((l) => l.id));
 }
 
 export async function completeOnboarding(_: FormState, formData: FormData): Promise<FormState> {
@@ -38,7 +45,7 @@ export async function completeOnboarding(_: FormState, formData: FormData): Prom
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
-    .update({ ...parsed.data, avatar: readAvatar(formData) })
+    .update({ ...parsed.data, avatar: await readAvatar(formData, user.id) })
     .eq("id", user.id);
   if (error) return { error: error.message };
   redirect("/?fx=welcome");
@@ -47,7 +54,7 @@ export async function completeOnboarding(_: FormState, formData: FormData): Prom
 export async function saveAvatar(formData: FormData) {
   const user = await requireAthlete();
   const supabase = await createClient();
-  await supabase.from("profiles").update({ avatar: readAvatar(formData) }).eq("id", user.id);
+  await supabase.from("profiles").update({ avatar: await readAvatar(formData, user.id) }).eq("id", user.id);
   revalidatePath("/", "layout");
   redirect("/perfil?fx=saved");
 }
@@ -68,21 +75,39 @@ export async function submitAttempt(_: FormState, formData: FormData): Promise<F
   const user = await requireAthlete();
   const machineId = String(formData.get("machineId") ?? "");
   const reps = Number(formData.get("reps"));
+  const liftedKg = Number(formData.get("liftedKg"));
+  let lat = Number(formData.get("lat"));
+  let lng = Number(formData.get("lng"));
+  const simulated = formData.get("geoSimulated") === "1";
   const evidenceUrl = String(formData.get("evidenceUrl") ?? "").trim() || null;
   const evidencePath = String(formData.get("evidencePath") ?? "").trim() || null;
   const evidenceType = String(formData.get("evidenceType") ?? "");
 
   if (!Number.isInteger(reps) || reps < 1 || reps > 100) return { error: "Repeticiones inválidas." };
+  if (!Number.isFinite(liftedKg) || liftedKg <= 0) return { error: "Escribe el peso que moviste." };
   if (!evidenceUrl && !evidencePath) return { error: "Sube un video o pega un enlace de evidencia." };
   if (evidenceUrl && !/^https?:\/\/\S+$/i.test(evidenceUrl)) return { error: "El enlace debe empezar por http(s)://" };
   if (evidencePath && !evidencePath.startsWith(`${user.id}/`)) return { error: "Archivo inválido." };
 
   const season = await getActiveSeason();
   if (!seasonOpen(season)) return { error: "No hay una temporada abierta en este momento." };
+  if (!gymReady(season)) return { error: "El juez todavía no ha fijado la ubicación del gimnasio." };
+
+  // Ubicación simulada: solo en local (http sin GPS), para probar desde el celular en la red.
+  if (simulated) {
+    if (!isDevLoginEnabled()) return { error: "Activa tu ubicación para enviar el intento." };
+    lat = season!.gym_lat!;
+    lng = season!.gym_lng!;
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { error: "Activa tu ubicación para enviar el intento." };
+  const dist = distanceM(lat, lng, season!.gym_lat!, season!.gym_lng!);
+  if (dist > season!.gym_radius_m)
+    return { error: `Estás a ${formatDistance(dist)} del gimnasio. Solo puedes enviar intentos desde el gym.` };
 
   const supabase = await createClient();
-  const { data: machine } = await supabase.from("machines").select("id, slug").eq("id", machineId).maybeSingle();
+  const { data: machine } = await supabase.from("machines").select("id, slug, max_weight_kg").eq("id", machineId).maybeSingle();
   if (!machine) return { error: "Máquina no encontrada." };
+  if (liftedKg > Number(machine.max_weight_kg)) return { error: `La pila de esta máquina llega hasta ${machine.max_weight_kg} kg.` };
 
   const { count } = await supabase
     .from("submissions")
@@ -99,6 +124,9 @@ export async function submitAttempt(_: FormState, formData: FormData): Promise<F
     machine_id: machine.id,
     season_id: season!.id,
     reps_completed: reps,
+    lifted_weight_kg: Math.round(liftedKg * 100) / 100,
+    geo_lat: lat,
+    geo_lng: lng,
     reps_counted: 0,
     body_weight_snapshot: 0,
     machine_weight_snapshot: 0,
@@ -155,4 +183,35 @@ export async function createSeason(_: FormState, formData: FormData): Promise<Fo
   if (error) return { error: error.message };
   revalidatePath("/", "layout");
   redirect("/juez?tab=temporada&fx=season");
+}
+
+export async function setGymLocation(_: FormState, formData: FormData): Promise<FormState> {
+  await requireJudge();
+  const season = await getActiveSeason();
+  if (!season) return { error: "Primero abre una temporada." };
+  const name = String(formData.get("gymName") ?? "").trim().slice(0, 100) || null;
+  const lat = Number(formData.get("lat"));
+  const lng = Number(formData.get("lng"));
+  const radius = Math.round(Number(formData.get("radius")));
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180)
+    return { error: "Coordenadas inválidas. Usa tu ubicación o pégalas desde Google Maps." };
+  if (!Number.isFinite(radius) || radius < 30 || radius > 2000) return { error: "El radio debe estar entre 30 y 2000 m." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("seasons")
+    .update({ gym_name: name, gym_lat: lat, gym_lng: lng, gym_radius_m: radius })
+    .eq("id", season.id);
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  redirect("/juez?tab=temporada&fx=saved");
+}
+
+export async function buyItem(formData: FormData) {
+  await requireAthlete();
+  const item = String(formData.get("item") ?? "");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("buy_item", { p_item: item });
+  revalidatePath("/", "layout");
+  if (error) redirect(`/tienda?error=${encodeURIComponent(error.message)}`);
+  redirect(`/tienda?fx=bought&item=${encodeURIComponent(item)}`);
 }

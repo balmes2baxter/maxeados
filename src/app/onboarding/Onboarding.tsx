@@ -7,36 +7,31 @@ import { PixelAvatar } from "@/components/PixelAvatar";
 import { PixelIcon } from "@/components/PixelIcon";
 import { sfx } from "@/components/fx";
 import type { Avatar } from "@/lib/avatar";
+import { Intro } from "./Intro";
 
-const INTRO = "¡Bienvenido al gym! Antes de entrenar necesitas tu personaje. Así te verán todos en el ranking.";
-
-function Typewriter({ text }: { text: string }) {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    if (n >= text.length) return;
-    const t = setTimeout(() => setN((x) => x + 1), 28);
-    return () => clearTimeout(t);
-  }, [n, text]);
-  return (
-    <p className="text-2xl leading-tight">
-      {text.slice(0, n)}
-      <span className="anim-blink">▌</span>
-    </p>
-  );
-}
+const STEPS = ["Personaje", "Ficha"];
+const RULES = [
+  { icon: "dumbbell", t: "6 máquinas" },
+  { icon: "flag", t: "Desde el gym" },
+  { icon: "gavel", t: "El juez valida" },
+];
 
 export function Onboarding({
   initialAvatar,
   initialName,
   initialPhone,
   initialWeight,
+  prize,
+  locked,
 }: {
   initialAvatar: Avatar;
   initialName: string;
   initialPhone: string;
   initialWeight?: number;
+  prize: string;
+  locked: { id: string; price: number }[];
 }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(-1); // -1 = intro del torneo
   const [avatar, setAvatar] = useState(initialAvatar);
   const [weight, setWeight] = useState(initialWeight ? String(initialWeight) : "");
   const [state, action, pending] = useActionState(completeOnboarding, undefined);
@@ -51,11 +46,12 @@ export function Onboarding({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  if (step === -1) return <Intro prize={prize} onDone={() => setStep(0)} />;
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-6">
-      {/* Progreso por pasos */}
+    <main className="intro-in mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-10 pt-6">
       <div className="mb-4 flex items-center gap-2">
-        {["Intro", "Personaje", "Datos"].map((label, i) => (
+        {STEPS.map((label, i) => (
           <div key={label} className="flex flex-1 flex-col gap-1">
             <div className="h-3 transition-colors duration-500" style={{ background: i <= step ? "var(--color-neon)" : "var(--color-line)", boxShadow: "0 0 0 2px #140c1c" }} />
             <span className={`font-pixel text-[8px] ${i === step ? "text-neon" : "text-muted"}`}>{label}</span>
@@ -65,76 +61,58 @@ export function Onboarding({
 
       <div key={step} className="anim-rise flex flex-1 flex-col">
         {step === 0 && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-6">
-            <PixelAvatar avatar={avatar} size={200} pose="flex" />
-            <div className="px-box w-full p-4">
-              <p className="font-pixel mb-2 text-[10px] text-gold">ENTRENADOR</p>
-              <Typewriter text={INTRO} />
-            </div>
-            <button className="px-btn w-full" onClick={() => go(1)}>
-              ¡Vamos! <PixelIcon name="back" size={14} className="rotate-180" />
+          <div className="flex flex-col gap-4">
+            <h1 className="font-pixel text-shadow-px text-base text-neon">TU PERSONAJE</h1>
+            <CharacterCreator value={avatar} onChange={setAvatar} locked={locked} />
+            <button className="px-btn" onClick={() => go(1)}>
+              Listo
             </button>
           </div>
         )}
 
         {step === 1 && (
-          <div className="flex flex-col gap-4">
-            <h1 className="font-pixel text-shadow-px text-base text-neon">Crea tu personaje</h1>
-            <CharacterCreator value={avatar} onChange={setAvatar} />
-            <div className="flex">
-              <button className="px-btn px-btn-ghost" onClick={() => go(0)}>
-                <PixelIcon name="back" size={14} />
-              </button>
-              <button className="px-btn flex-1" onClick={() => go(2)}>
-                Listo, sigue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
           <form action={action} className="flex flex-col gap-3">
             <input type="hidden" name="avatar" value={JSON.stringify(avatar)} />
-            <div className="flex items-end gap-3">
-              <PixelAvatar avatar={avatar} size={110} />
-              <div className="px-box flex-1 p-3">
-                <p className="font-pixel text-[10px] text-gold">FICHA DEL ATLETA</p>
-                <p className="text-xl leading-tight">Tu peso corporal define tu fuerza relativa. El juez lo verificará en el gym.</p>
-              </div>
+            <div className="flex flex-col items-center">
+              <PixelAvatar avatar={avatar} size={130} pose="flex" />
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {RULES.map((r) => (
+                <div key={r.t} className="px-box flex flex-col items-center gap-1 p-2">
+                  <PixelIcon name={r.icon} size={24} />
+                  <span className="font-pixel text-center text-[7px] leading-tight text-bone">{r.t}</span>
+                </div>
+              ))}
             </div>
 
             <label className="px-label mt-2" htmlFor="fullName">Nombre de atleta</label>
             <input id="fullName" name="fullName" className="px-input" defaultValue={initialName} required maxLength={120} />
 
-            <label className="px-label mt-2" htmlFor="phone">Teléfono (opcional)</label>
-            <input id="phone" name="phone" className="px-input" defaultValue={initialPhone} inputMode="tel" maxLength={20} placeholder="300 000 0000" />
-
-            <label className="px-label mt-2" htmlFor="bodyWeightKg">Peso corporal (kg)</label>
-            <div className="flex items-center gap-3">
-              <input
-                id="bodyWeightKg"
-                name="bodyWeightKg"
-                className="px-input font-pixel !text-lg"
-                type="number"
-                min={30}
-                max={250}
-                step="0.1"
-                required
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder="75"
-              />
-              <PixelIcon name="scale" size={40} className={weight ? "anim-pop" : ""} />
-            </div>
+            <label className="px-label mt-2" htmlFor="bodyWeightKg">Tu peso (kg)</label>
+            <input
+              id="bodyWeightKg"
+              name="bodyWeightKg"
+              className="px-input font-pixel !text-lg"
+              type="number"
+              inputMode="decimal"
+              min={30}
+              max={250}
+              step="0.1"
+              required
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder="75"
+            />
+            <input type="hidden" name="phone" value={initialPhone} />
 
             {state?.error && <p className="anim-shake px-box p-2 text-xl text-danger">⚠ {state.error}</p>}
 
             <div className="mt-4 flex">
-              <button type="button" className="px-btn px-btn-ghost" onClick={() => go(1)}>
+              <button type="button" className="px-btn px-btn-ghost" onClick={() => go(0)} aria-label="Atrás">
                 <PixelIcon name="back" size={14} />
               </button>
-              <button className="px-btn px-btn-gold flex-1" disabled={pending}>
-                {pending ? "Guardando..." : "¡Entrar al gym!"}
+              <button className="px-btn flex-1" disabled={pending}>
+                {pending ? "Guardando..." : "¡A competir!"}
               </button>
             </div>
           </form>

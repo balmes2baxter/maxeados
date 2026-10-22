@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { reviewSubmission } from "@/actions/game";
 import { sfx } from "@/components/fx";
 
-const QUICK = ["Rango incompleto", "Rebote de placas", "No se ve la pila completa", "No es el peso tope", "Pausa / trampa en la rep", "Conteo de reps no coincide"];
+const QUICK = ["Rango incompleto", "Rebote de placas", "No se ve la pila completa", "Las placas no suman lo declarado", "Pausa / trampa en la rep", "Conteo de reps no coincide"];
 
 function Buttons() {
   const { pending } = useFormStatus();
@@ -31,7 +31,7 @@ export function ReviewForm({ id }: { id: string }) {
           <button
             key={q}
             type="button"
-            className={`px-chip cursor-pointer transition-colors ${notes.includes(q) ? "!bg-pink !text-ink" : ""}`}
+            className={`px-chip cursor-pointer transition-colors ${notes.includes(q) ? "!bg-bone !text-ink" : ""}`}
             onClick={() => {
               sfx("select");
               setNotes((n) => (n.includes(q) ? n.replace(q, "").replace(/^[\s,]+|[\s,]+$/g, "") : n ? `${n}, ${q}` : q));

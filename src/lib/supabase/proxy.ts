@@ -38,10 +38,9 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // No colocar lógica entre createServerClient y getUser().
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // No colocar lógica entre createServerClient y getClaims().
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims.sub ?? null;
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));

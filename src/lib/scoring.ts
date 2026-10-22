@@ -1,4 +1,5 @@
-// Algoritmo de puntuación (README): P_m = (W_m / PC) × (1 + R/30), con 1 ≤ R ≤ 15.
+// Algoritmo de puntuación (README): P_m = (W / PC) × (1 + R/30), con 1 ≤ R ≤ 15.
+// W es el peso que el atleta declara haber movido (nunca más que el tope de la pila).
 
 export const MAX_COUNTED_REPS = 15;
 export const MACHINES_REQUIRED = 6;
@@ -8,10 +9,10 @@ export function countedReps(repsCompleted: number): number {
   return Math.min(Math.floor(repsCompleted), MAX_COUNTED_REPS);
 }
 
-export function machineScore(maxWeightKg: number, bodyWeightKg: number, repsCompleted: number): number {
+export function machineScore(liftedKg: number, bodyWeightKg: number, repsCompleted: number): number {
   const reps = countedReps(repsCompleted);
   if (reps === 0 || bodyWeightKg <= 0) return 0;
-  return round4((maxWeightKg / bodyWeightKg) * (1 + reps / 30));
+  return round4((liftedKg / bodyWeightKg) * (1 + reps / 30));
 }
 
 export function round4(n: number): number {

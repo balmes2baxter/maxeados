@@ -16,15 +16,14 @@ export function DevLogin() {
   const [email, setEmail] = useState("");
 
   return (
-    <form action={action} className="px-box px-box-accent flex flex-col gap-1 p-3" style={{ ["--accent" as string]: "#ff3ea5" }}>
-      <p className="font-pixel text-[10px] text-pink">ENTRAR EN LOCAL</p>
-      <p className="text-lg leading-tight text-muted">Sin Google: escribe un correo cualquiera y se crea tu cuenta en el Supabase local.</p>
+    <form action={action} className="px-box px-box-accent flex flex-col gap-1 p-3" style={{ ["--accent" as string]: "var(--color-line)" }}>
+      <p className="font-pixel text-[10px] text-bone">ENTRAR EN LOCAL</p>
       <div className="mt-1 flex flex-wrap">
         {QUICK.map((q) => (
           <button
             key={q.label}
             type="button"
-            className={`px-chip cursor-pointer ${email === q.email && (q.email || name === "") ? "!bg-pink !text-ink" : ""}`}
+            className={`px-chip cursor-pointer ${email === q.email && (q.email || name === "") ? "!bg-bone !text-ink" : ""}`}
             onClick={() => {
               sfx("select");
               setName(q.name);
@@ -49,7 +48,7 @@ export function DevLogin() {
         onChange={(e) => setEmail(e.target.value)}
       />
       {state?.error && <p className="anim-shake text-xl text-danger">⚠ {state.error}</p>}
-      <button className="px-btn px-btn-pink mt-3" disabled={pending}>{pending ? "Entrando..." : "Entrar"}</button>
+      <button className="px-btn mt-3" disabled={pending}>{pending ? "Entrando..." : "Entrar"}</button>
     </form>
   );
 }

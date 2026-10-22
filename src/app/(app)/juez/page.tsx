@@ -1,7 +1,9 @@
+import { Suspense } from "react";
+import Loading from "../loading";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireJudge } from "@/lib/session";
-import { formatCop, getActiveSeason, machineShort } from "@/lib/data";
+import { formatCop, formatKg, getActiveSeason, machineShort } from "@/lib/data";
 import { verifyWeight } from "@/actions/game";
 import type { Avatar } from "@/lib/avatar";
 import { PixelAvatar } from "@/components/PixelAvatar";
@@ -11,6 +13,7 @@ import { StatusChip } from "@/components/StatusChip";
 import { VideoEmbed } from "@/components/VideoEmbed";
 import { ReviewForm } from "./ReviewForm";
 import { SeasonForm } from "./SeasonForm";
+import { GymForm } from "./GymForm";
 
 const TABS = [
   { id: "cola", label: "Cola" },
@@ -20,12 +23,14 @@ const TABS = [
 ];
 
 const SUB_SELECT =
-  "id, reps_completed, reps_counted, calculated_score, body_weight_snapshot, machine_weight_snapshot, evidence_url, evidence_path, evidence_type, status, admin_notes, created_at, reviewed_at, profiles!submissions_user_id_fkey(full_name, avatar, weight_verified), machines(name, slug)";
+  "id, reps_completed, reps_counted, lifted_weight_kg, geo_distance_m, calculated_score, body_weight_snapshot, machine_weight_snapshot, evidence_url, evidence_path, evidence_type, status, admin_notes, created_at, reviewed_at, profiles!submissions_user_id_fkey(full_name, avatar, weight_verified), machines(name, slug)";
 
 type SubRow = {
   id: string;
   reps_completed: number;
   reps_counted: number;
+  lifted_weight_kg: number;
+  geo_distance_m: number | null;
   calculated_score: number;
   body_weight_snapshot: number;
   machine_weight_snapshot: number;
@@ -59,7 +64,7 @@ async function loadSubs(seasonId: string, pending: boolean) {
   );
 }
 
-export default async function Juez({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+async function JuezContent({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab = "cola" } = await searchParams;
   await requireJudge();
   const season = await getActiveSeason();
@@ -69,12 +74,12 @@ export default async function Juez({ searchParams }: { searchParams: Promise<{ t
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-pixel text-shadow-px text-sm text-pink">MESA DEL JUEZ</h1>
-        <span className="px-chip" style={{ ["--chip" as string]: "#00e5ff", ["--chip-fg" as string]: "#140c1c" }}>{queue.length} en cola</span>
+        <h1 className="font-pixel text-shadow-px text-sm text-neon">MESA DEL JUEZ</h1>
+        <span className="px-chip" style={{ ["--chip" as string]: "var(--color-gold)", ["--chip-fg" as string]: "var(--color-ink)" }}>{queue.length} en cola</span>
       </div>
       <div className="grid grid-cols-4">
         {TABS.map((t) => (
-          <Link key={t.id} href={`/juez?tab=${t.id}`} className={`px-btn px-btn-sm !px-1 !text-[8px] ${tab === t.id ? "px-btn-cyan" : "px-btn-ghost"}`}>
+          <Link key={t.id} href={`/juez?tab=${t.id}`} className={`px-btn px-btn-sm !px-1 !text-[8px] ${tab === t.id ? "px-btn-on" : "px-btn-ghost"}`}>
             {t.label}
           </Link>
         ))}
@@ -95,17 +100,21 @@ export default async function Juez({ searchParams }: { searchParams: Promise<{ t
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-2xl leading-none">{q.profiles?.full_name}</p>
                   <p className="text-lg text-muted">
-                    {q.body_weight_snapshot} kg {q.profiles?.weight_verified ? <span className="text-neon">✔ verificado</span> : <span className="text-pink">sin verificar</span>}
+                    {q.body_weight_snapshot} kg {q.profiles?.weight_verified ? <span className="text-neon">✔ verificado</span> : <span className="text-danger">sin verificar</span>}
                   </p>
                 </div>
                 <MachineSprite slug={q.machines?.slug ?? ""} size={48} lit={6} />
               </div>
               <div className="grid grid-cols-3 gap-1 text-center">
                 <div className="bg-panel-2 p-1"><p className="px-label">Máquina</p><p className="text-lg leading-none">{machineShort(q.machines?.name ?? "")}</p></div>
-                <div className="bg-panel-2 p-1"><p className="px-label">Reps</p><p className="font-pixel text-sm">{q.reps_completed}{q.reps_completed > q.reps_counted && <span className="text-pink">→{q.reps_counted}</span>}</p></div>
-                <div className="bg-panel-2 p-1"><p className="px-label">Puntaje</p><p className="font-pixel text-sm text-gold">{Number(q.calculated_score).toFixed(2)}</p></div>
+                <div className="bg-panel-2 p-1"><p className="px-label">Declaró</p><p className="font-pixel text-sm text-gold">{formatKg(Number(q.lifted_weight_kg))}</p></div>
+                <div className="bg-panel-2 p-1"><p className="px-label">Reps</p><p className="font-pixel text-sm">{q.reps_completed}</p></div>
               </div>
-              <p className="-mt-1 text-center text-base text-muted">Debe mover el tope: {q.machine_weight_snapshot} kg · enviado {new Date(q.created_at).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="-mt-1 text-center text-base text-muted">
+                Revisa que las placas sumen {formatKg(Number(q.lifted_weight_kg))}
+                {q.geo_distance_m !== null && <> · enviado a {q.geo_distance_m} m del gym</>}
+                {" · "}{new Date(q.created_at).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              </p>
               {q.mediaUrl ? (
                 <VideoEmbed url={q.mediaUrl} kind={q.evidence_type} />
               ) : (
@@ -128,8 +137,15 @@ export default async function Juez({ searchParams }: { searchParams: Promise<{ t
               <p className="text-xl text-muted">{season.start_date} → {season.end_date} · Pozo {formatCop(season.prize_amount_cop)}</p>
             </div>
           )}
+          {season && (
+            <div className="px-box p-4">
+              <h2 className="font-pixel mb-1 text-[11px] text-bone">UBICACIÓN DEL GYM</h2>
+              <p className="mb-3 text-lg text-muted">Los atletas solo pueden enviar intentos dentro de este radio.</p>
+              <GymForm name={season.gym_name} lat={season.gym_lat} lng={season.gym_lng} radius={season.gym_radius_m} />
+            </div>
+          )}
           <div className="px-box p-4">
-            <h2 className="font-pixel mb-3 text-[11px] text-gold">NUEVA TEMPORADA</h2>
+            <h2 className="font-pixel mb-3 text-[11px] text-bone">NUEVA TEMPORADA</h2>
             <SeasonForm />
           </div>
         </section>
@@ -160,12 +176,12 @@ async function WeightsTab() {
             <PixelAvatar avatar={a.avatar} size={44} shadow={false} animate={false} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-xl leading-none">{a.name}</p>
-              <p className={`text-base ${a.verified ? "text-neon" : "text-pink"}`}>{a.verified ? "✔ verificado" : "pendiente"}</p>
+              <p className={`text-base ${a.verified ? "text-neon" : "text-danger"}`}>{a.verified ? "✔ verificado" : "pendiente"}</p>
             </div>
             <form action={verifyWeight} className="flex items-center">
               <input type="hidden" name="userId" value={a.id} />
               <input name="bodyWeightKg" type="number" step="0.1" min={30} max={300} defaultValue={a.weight} className="px-input !w-20 !text-xl" aria-label="Peso oficial" />
-              <button className="px-btn px-btn-sm px-btn-gold" aria-label="Verificar peso"><PixelIcon name="scale" size={14} /></button>
+              <button className="px-btn px-btn-sm" aria-label="Verificar peso"><PixelIcon name="scale" size={14} /></button>
             </form>
           </li>
         ))}
@@ -183,12 +199,21 @@ async function HistoryTab({ seasonId }: { seasonId: string }) {
           <PixelAvatar avatar={r.profiles?.avatar} size={36} shadow={false} animate={false} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-xl leading-none">{r.profiles?.full_name}</p>
-            <p className="truncate text-base text-muted">{r.machines?.name} ×{r.reps_completed}{r.admin_notes && <span className="text-pink"> · {r.admin_notes}</span>}</p>
+            <p className="truncate text-base text-muted">{r.machines?.name} · {formatKg(Number(r.lifted_weight_kg))} × {r.reps_completed}{r.admin_notes && <> · {r.admin_notes}</>}</p>
           </div>
           <span className="font-pixel text-[9px] text-gold">{Number(r.calculated_score).toFixed(2)}</span>
           <StatusChip status={r.status} />
         </li>
       ))}
     </ul>
+  );
+}
+
+// Leer la URL dentro de un <Suspense> mantiene la navegación instantánea (se ve el esqueleto al tiro).
+export default function Juez(props: { searchParams: Promise<{ tab?: string }> }) {
+  return (
+    <Suspense fallback={<Loading />}>
+      <JuezContent {...props} />
+    </Suspense>
   );
 }

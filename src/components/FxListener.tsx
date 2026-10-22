@@ -11,17 +11,17 @@ const FX: Record<string, () => void> = {
   welcome: () => {
     confetti(90);
     sfx("levelup");
-    toast({ title: "¡BIENVENIDO AL GYM!", body: "Tu personaje está listo. Ve por tu primer intento.", icon: "star", tone: "gold" });
+    toast({ title: "¡A COMPETIR!", icon: "star", tone: "gold" });
   },
   submitted: () => {
     sfx("coin");
-    floater("+10 XP", window.innerWidth / 2 - 40, window.innerHeight / 2);
-    toast({ title: "INTENTO ENVIADO", body: "El juez revisará tu video. ¡Mucha fuerza!", icon: "hourglass", tone: "cyan" });
+    floater("+10 fichas", window.innerWidth / 2 - 50, window.innerHeight / 2);
+    toast({ title: "ENVIADO AL JUEZ", icon: "hourglass", tone: "cyan" });
   },
   approved: () => {
     confetti(50);
     sfx("success");
-    toast({ title: "APROBADO", body: "El intento ya suma al ranking.", icon: "check", tone: "neon" });
+    toast({ title: "APROBADO", icon: "check", tone: "neon" });
   },
   rejected: () => {
     sfx("error");
@@ -30,6 +30,11 @@ const FX: Record<string, () => void> = {
   verified: () => {
     sfx("coin");
     toast({ title: "PESO VERIFICADO", body: "Se recalcularon sus puntajes.", icon: "scale", tone: "gold" });
+  },
+  bought: () => {
+    confetti(60);
+    sfx("levelup");
+    toast({ title: "¡ES TUYO!", body: "Póntelo en el vestidor.", icon: "star", tone: "gold" });
   },
   saved: () => {
     sfx("select");
@@ -127,7 +132,7 @@ export function ProgressWatcher({
         <PixelAvatar avatar={avatar} size={170} pose="flex" />
         <p className="font-pixel text-3xl text-neon">NV {levelUp}</p>
         <p className="text-2xl text-muted">Ahora eres {levelTitle(levelUp)}</p>
-        <button className="px-btn px-btn-gold mt-2" onClick={() => setLevelUp(null)}>
+        <button className="px-btn mt-2" onClick={() => setLevelUp(null)}>
           <PixelIcon name="star" size={16} /> ¡Sigue así!
         </button>
       </div>

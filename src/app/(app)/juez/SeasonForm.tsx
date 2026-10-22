@@ -26,7 +26,7 @@ export function SeasonForm() {
       <input id="s-prize" name="prizeAmountCop" type="number" min={0} step={1000} className="px-input" defaultValue={100000} required />
       <p className="text-base text-muted">Crear una temporada cierra la actual. El ranking arranca de cero.</p>
       {state?.error && <p className="anim-shake text-xl text-danger">⚠ {state.error}</p>}
-      <button className="px-btn px-btn-gold mt-2" disabled={pending}>{pending ? "Creando..." : "Abrir temporada"}</button>
+      <button className="px-btn mt-2" disabled={pending}>{pending ? "Creando..." : "Abrir temporada"}</button>
     </form>
   );
 }

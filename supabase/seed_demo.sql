@@ -71,39 +71,41 @@ begin
          where id = v_uid;
         alter table public.profiles enable trigger profiles_guard;
 
-        for v_m in select id, sort_order from public.machines where is_active order by sort_order loop
+        for v_m in select id, sort_order, max_weight_kg from public.machines where is_active order by sort_order loop
             v_reps := a.reps[v_m.sort_order];
             if v_reps is null or v_reps = 0 then continue; end if;
             -- Un intento previo más flojo y el mejor, ambos aprobados
             if v_reps > 4 then
                 insert into public.submissions (user_id, machine_id, season_id, reps_completed, reps_counted,
-                    body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, created_at)
+                    body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, created_at, lifted_weight_kg)
                 values (v_uid, v_m.id, v_season, v_reps - 3, 0, 0, 0, 0,
-                    'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', now() - ((v_m.sort_order * 3 + v_i) % 9 + 2) * interval '1 day')
+                    'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', now() - ((v_m.sort_order * 3 + v_i) % 9 + 2) * interval '1 day',
+                    round(v_m.max_weight_kg * (0.45 + ((v_i * 7 + v_m.sort_order * 3) % 30) / 100.0)))
                 returning id into v_sub;
                 update public.submissions set status = 'APPROVED' where id = v_sub;
             end if;
             insert into public.submissions (user_id, machine_id, season_id, reps_completed, reps_counted,
-                body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, created_at)
+                body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, created_at, lifted_weight_kg)
             values (v_uid, v_m.id, v_season, v_reps, 0, 0, 0, 0,
-                'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', now() - ((v_m.sort_order * 3 + v_i) % 9) * interval '1 day')
+                'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', now() - ((v_m.sort_order * 3 + v_i) % 9) * interval '1 day',
+                round(v_m.max_weight_kg * (0.55 + ((v_i * 7 + v_m.sort_order * 3) % 35) / 100.0)))
             returning id into v_sub;
             update public.submissions set status = 'APPROVED', reviewed_at = now() - ((v_m.sort_order + v_i) % 7) * interval '1 day' where id = v_sub;
         end loop;
 
         -- Intentos pendientes para la cola del juez
-        for v_m in select id from public.machines where is_active order by sort_order desc limit a.pending loop
+        for v_m in select id, max_weight_kg from public.machines where is_active order by sort_order desc limit a.pending loop
             insert into public.submissions (user_id, machine_id, season_id, reps_completed, reps_counted,
-                body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type)
+                body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, lifted_weight_kg)
             values (v_uid, v_m.id, v_season, 10 + v_i % 6, 0, 0, 0, 0,
-                'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link');
+                'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', round(v_m.max_weight_kg * 0.7));
         end loop;
 
         -- Un rechazado con retroalimentación
         if v_i % 2 = 0 then
             insert into public.submissions (user_id, machine_id, season_id, reps_completed, reps_counted,
-                body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, created_at)
-            select v_uid, id, v_season, 18, 0, 0, 0, 0, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', now() - interval '5 days'
+                body_weight_snapshot, machine_weight_snapshot, calculated_score, evidence_url, evidence_type, created_at, lifted_weight_kg)
+            select v_uid, id, v_season, 18, 0, 0, 0, 0, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'link', now() - interval '5 days', round(max_weight_kg * 0.8)
               from public.machines where is_active order by sort_order limit 1
             returning id into v_sub;
             update public.submissions set status = 'REJECTED', admin_notes = 'Rango incompleto' where id = v_sub;
