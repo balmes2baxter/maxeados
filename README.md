@@ -208,6 +208,21 @@ update public.profiles set role = 'ADMIN' where email = 'tu-correo@gmail.com';
 ```
 
 ### 4. Correr
+
+#### Para desarrollo en PC y Móvil (Recomendado):
+```bash
+npm run dev:movil
+```
+* Muestra la URL local (`http://localhost:3001`), la **IP de tu red Wi-Fi** y un **código QR** en la terminal.
+* Solo escaneas el QR con la cámara de tu celular (conectado al mismo Wi-Fi) y entras directo.
+
+#### Para probar fuera del Wi-Fi (con datos móviles 4G/5G en el gym):
+```bash
+npm run dev:tunel
+```
+* Genera un enlace público seguro con **HTTPS** y su respectivo código QR.
+
+#### Modo estándar:
 ```bash
 npm run dev
 ```
