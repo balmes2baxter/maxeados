@@ -1,215 +1,307 @@
 "use client";
 
-// Reproductor BGM Chiptune Melancólico (Estilo "Fallen Down" de Undertale)
-// Síntesis Web Audio API en tiempo real (0 KB de descarga).
+// BGM Chiptune Melancólico: "Fallen Down" de Undertale (Toby Fox)
+// Síntesis Web Audio API en tiempo real de alta fidelidad (0 KB de descarga).
+// Timbre: Celesta / Music Box cálido con arpegios nostálgicos y eco de caverna (Ruins).
 
-let audioCtx: AudioContext | null = null;
-let bgmGain: GainNode | null = null;
+import { isMuted } from "@/components/fx";
+
+let sharedAudioCtx: AudioContext | null = null;
+let bgmMasterGain: GainNode | null = null;
+let delayNode: DelayNode | null = null;
+let delayGainNode: GainNode | null = null;
+let delayFilterNode: BiquadFilterNode | null = null;
+let masterFilterNode: BiquadFilterNode | null = null;
+
 let isPlaying = false;
 let loopTimeout: ReturnType<typeof setTimeout> | null = null;
+let activeOscillators: OscillatorNode[] = [];
 
-// Frecuencias exactas (Hz) en escala D Mayor (Re Mayor)
-const N = {
-  // Bajos (Octava 2 y 3)
-  D2: 73.42,
-  G2: 98.0,
-  B2: 123.47,
-  A2: 110.0,
-  D3: 146.83,
-  E3: 164.81,
-  Fs3: 185.0,
-  F3: 174.61,
-  G3: 196.0,
-  A3: 220.0,
-  // Medios / Acompañamiento (Octava 4)
-  D4: 293.66,
-  E4: 329.63,
-  Fs4: 369.99,
-  G4: 392.0,
-  A4: 440.0,
-  B4: 493.88,
-  Cs5: 554.37,
-  // Melodía (Octava 5 - estilo cajita musical / Undertale)
-  D5: 587.33,
-  E5: 659.25,
-  Fs5: 739.99,
-  G5: 783.99,
-  A5: 880.0,
-  B5: 987.77,
-};
+const BPM = 110;
+const BEAT_SEC = 60 / BPM; // ~0.54545s por pulso
+const TOTAL_BEATS = 48; // 16 compases
+const TOTAL_DURATION = TOTAL_BEATS * BEAT_SEC; // ~26.18s
 
-// Secuencia en compás de 3/4 melancólico (~100 BPM, 1 beat = 0.6s)
-// Estructura inspirada en la progresión nostálgica de "Fallen Down" (Toriel / Ruins)
-type NoteEvent = [freq: number, time: number, duration: number, type: OscillatorType, vol: number];
-
-function createMelodyEvents(): { totalDuration: number; events: NoteEvent[] } {
-  const beat = 0.58; // segundos por pulso
-  const measure = beat * 3; // compás 3/4
-  const events: NoteEvent[] = [];
-
-  const add = (freq: number, m: number, b: number, dur = 0.8, type: OscillatorType = "sine", vol = 0.04) => {
-    const time = m * measure + b * beat;
-    events.push([freq, time, dur, type, vol]);
-  };
-
-  // Frase 1: Re Mayor (Paz y nostalgia)
-  // Bajo cálido
-  add(N.D3, 0, 0, 1.6, "triangle", 0.05);
-  add(N.A3, 0, 1, 1.0, "triangle", 0.03);
-  add(N.Fs4, 0, 2, 1.0, "triangle", 0.03);
-  // Melodía tipo cajita musical (Fallen Down motif)
-  add(N.Fs5, 0, 0, 0.7, "sine", 0.045);
-  add(N.E5, 0, 1, 0.6, "sine", 0.04);
-  add(N.D5, 0, 2, 0.9, "sine", 0.045);
-
-  // Frase 2: Sol Mayor (Elevación suave)
-  add(N.G2, 1, 0, 1.6, "triangle", 0.05);
-  add(N.D4, 1, 1, 1.0, "triangle", 0.03);
-  add(N.B4, 1, 2, 1.0, "triangle", 0.03);
-  add(N.B4, 1, 0, 0.6, "sine", 0.035);
-  add(N.D5, 1, 1, 0.6, "sine", 0.04);
-  add(N.Fs5, 1, 2, 1.1, "sine", 0.045);
-
-  // Frase 3: Si menor (Melancolía)
-  add(N.B2, 2, 0, 1.6, "triangle", 0.05);
-  add(N.Fs3, 2, 1, 1.0, "triangle", 0.03);
-  add(N.D4, 2, 2, 1.0, "triangle", 0.03);
-  add(N.E5, 2, 0, 0.7, "sine", 0.045);
-  add(N.D5, 2, 1, 0.6, "sine", 0.04);
-  add(N.Cs5, 2, 2, 0.9, "sine", 0.04);
-
-  // Frase 4: La Mayor (Resolución suspendida)
-  add(N.A2, 3, 0, 1.6, "triangle", 0.05);
-  add(N.E3, 3, 1, 1.0, "triangle", 0.03);
-  add(N.Cs5, 3, 2, 1.0, "triangle", 0.03);
-  add(N.B4, 3, 0, 0.6, "sine", 0.035);
-  add(N.A4, 3, 1, 0.6, "sine", 0.035);
-  add(N.Fs5, 3, 2, 1.2, "sine", 0.045);
-
-  // Frase 5: Re Mayor segunda parte (eco más alto)
-  add(N.D3, 4, 0, 1.6, "triangle", 0.05);
-  add(N.A3, 4, 1, 1.0, "triangle", 0.03);
-  add(N.D5, 4, 2, 1.0, "triangle", 0.03);
-  add(N.A5, 4, 0, 0.8, "sine", 0.04);
-  add(N.Fs5, 4, 1, 0.6, "sine", 0.04);
-  add(N.D5, 4, 2, 0.9, "sine", 0.045);
-
-  // Frase 6: Sol Mayor (caída de notas lentas)
-  add(N.G2, 5, 0, 1.6, "triangle", 0.05);
-  add(N.D4, 5, 1, 1.0, "triangle", 0.03);
-  add(N.G4, 5, 2, 1.0, "triangle", 0.03);
-  add(N.B4, 5, 0, 0.6, "sine", 0.035);
-  add(N.D5, 5, 1, 0.6, "sine", 0.04);
-  add(N.E5, 5, 2, 1.0, "sine", 0.04);
-
-  // Frase 7: Mi menor / La7 (despedida triste)
-  add(N.A2, 6, 0, 1.6, "triangle", 0.05);
-  add(N.E4, 6, 1, 1.0, "triangle", 0.03);
-  add(N.G4, 6, 2, 1.0, "triangle", 0.03);
-  add(N.Fs5, 6, 0, 0.7, "sine", 0.04);
-  add(N.E5, 6, 1, 0.6, "sine", 0.04);
-  add(N.Cs5, 6, 2, 0.8, "sine", 0.035);
-
-  // Frase 8: Cierre en Re Mayor suave
-  add(N.D2, 7, 0, 2.0, "triangle", 0.05);
-  add(N.Fs4, 7, 1, 1.2, "triangle", 0.03);
-  add(N.A4, 7, 2, 1.2, "triangle", 0.03);
-  add(N.D5, 7, 0, 2.2, "sine", 0.045);
-
-  return { totalDuration: 8 * measure, events };
+export function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioCtx) {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioCtx = new AudioCtx();
+    }
+  }
+  return sharedAudioCtx;
 }
 
-function playNote(
+function setupAudioGraph(ctx: AudioContext) {
+  if (bgmMasterGain) return;
+
+  masterFilterNode = ctx.createBiquadFilter();
+  masterFilterNode.type = "lowpass";
+  masterFilterNode.frequency.setValueAtTime(4000, ctx.currentTime);
+
+  bgmMasterGain = ctx.createGain();
+  bgmMasterGain.gain.setValueAtTime(0.22, ctx.currentTime);
+
+  delayNode = ctx.createDelay();
+  delayNode.delayTime.setValueAtTime(BEAT_SEC * 0.5, ctx.currentTime);
+
+  delayFilterNode = ctx.createBiquadFilter();
+  delayFilterNode.type = "lowpass";
+  delayFilterNode.frequency.setValueAtTime(1400, ctx.currentTime);
+
+  delayGainNode = ctx.createGain();
+  delayGainNode.gain.setValueAtTime(0.28, ctx.currentTime);
+
+  delayNode.connect(delayFilterNode);
+  delayFilterNode.connect(delayGainNode);
+  delayGainNode.connect(delayNode);
+
+  bgmMasterGain.connect(masterFilterNode);
+  masterFilterNode.connect(ctx.destination);
+
+  delayFilterNode.connect(masterFilterNode);
+}
+
+const LEAD_NOTES: [number, number, number][] = [[0.0, 0.5, 739.99], [0.5, 0.5, 554.37], [1.0, 0.5, 739.99], [1.5, 0.5, 554.37], [2.0, 0.5, 739.99], [2.5, 0.5, 554.37], [3.0, 0.5, 739.99], [3.5, 0.5, 554.37], [4.0, 0.5, 739.99], [4.5, 0.5, 554.37], [5.0, 0.5, 739.99], [5.5, 0.5, 554.37], [6.0, 0.5, 493.88], [6.5, 0.5, 440.0], [7.0, 1.0, 554.37], [8.0, 0.5, 440.0], [8.5, 0.5, 493.88], [9.0, 0.5, 659.26], [9.5, 0.5, 622.25], [10.0, 0.5, 659.26], [10.5, 0.5, 739.99], [11.0, 0.5, 622.25], [11.5, 0.5, 493.88], [12.0, 0.5, 739.99], [12.5, 0.5, 493.88], [13.0, 0.5, 739.99], [13.5, 0.5, 493.88], [14.0, 0.5, 739.99], [14.5, 0.5, 493.88], [15.0, 0.5, 739.99], [15.5, 0.5, 466.16], [16.0, 0.5, 739.99], [16.5, 0.5, 466.16], [17.0, 1.0, 783.99], [18.0, 0.5, 739.99], [18.5, 0.5, 587.33], [19.0, 0.5, 739.99], [19.5, 0.5, 587.33], [20.0, 0.5, 659.26], [20.5, 0.5, 739.99], [21.0, 1.0, 659.26], [22.0, 1.0, 587.33], [23.0, 1.0, 554.37], [24.0, 0.5, 739.99], [24.5, 0.5, 554.37], [25.0, 0.5, 739.99], [25.5, 0.5, 554.37], [26.0, 0.5, 739.99], [26.5, 0.5, 554.37], [27.0, 0.5, 739.99], [27.5, 0.5, 554.37], [28.0, 0.5, 739.99], [28.5, 0.5, 554.37], [29.0, 0.5, 739.99], [29.5, 0.5, 554.37], [30.0, 0.5, 493.88], [30.5, 0.5, 440.0], [31.0, 1.0, 554.37], [32.0, 0.5, 440.0], [32.5, 0.5, 493.88], [33.0, 0.5, 659.26], [33.5, 0.5, 622.25], [34.0, 0.5, 659.26], [34.5, 0.5, 739.99], [35.0, 0.5, 622.25], [35.5, 0.5, 493.88], [36.0, 0.5, 739.99], [36.5, 0.5, 493.88], [37.0, 0.5, 739.99], [37.5, 0.5, 493.88], [38.0, 0.5, 739.99], [38.5, 0.5, 493.88], [39.0, 0.5, 739.99], [39.5, 0.5, 466.16], [40.0, 0.5, 739.99], [40.5, 0.5, 466.16], [41.0, 1.0, 783.99], [42.0, 0.5, 739.99], [42.5, 0.5, 587.33], [43.0, 0.5, 739.99], [43.5, 0.5, 587.33], [44.0, 0.5, 659.26], [44.5, 0.5, 739.99], [45.0, 1.0, 659.26], [46.0, 1.0, 587.33], [47.0, 1.0, 554.37]];
+const ARP_NOTES: [number, number, number][] = [[0.0, 0.5, 293.66], [0.5, 0.5, 369.99], [1.0, 0.5, 440.0], [1.5, 0.5, 369.99], [2.0, 0.5, 440.0], [2.5, 0.5, 369.99], [3.0, 0.5, 293.66], [3.5, 0.5, 369.99], [4.0, 0.5, 440.0], [4.5, 0.5, 369.99], [5.0, 0.5, 440.0], [5.5, 0.5, 369.99], [6.0, 0.5, 246.94], [6.5, 0.5, 311.13], [7.0, 0.5, 369.99], [7.5, 0.5, 311.13], [8.0, 0.5, 369.99], [8.5, 0.5, 311.13], [9.0, 0.5, 246.94], [9.5, 0.5, 311.13], [10.0, 0.5, 369.99], [10.5, 0.5, 311.13], [11.0, 0.5, 369.99], [11.5, 0.5, 311.13], [12.0, 0.5, 196.0], [12.5, 0.5, 246.94], [13.0, 0.5, 293.66], [13.5, 0.5, 246.94], [14.0, 0.5, 293.66], [14.5, 0.5, 246.94], [15.0, 0.5, 196.0], [15.5, 0.5, 233.08], [16.0, 0.5, 293.66], [16.5, 0.5, 233.08], [17.0, 0.5, 293.66], [17.5, 0.5, 233.08], [18.0, 0.5, 293.66], [18.5, 0.5, 369.99], [19.0, 0.5, 440.0], [19.5, 0.5, 369.99], [20.0, 0.5, 440.0], [20.5, 0.5, 369.99], [21.0, 0.5, 277.18], [21.5, 0.5, 329.63], [22.0, 0.5, 440.0], [22.5, 0.5, 329.63], [23.0, 0.5, 440.0], [23.5, 0.5, 329.63], [24.0, 0.5, 293.66], [24.5, 0.5, 369.99], [25.0, 0.5, 440.0], [25.5, 0.5, 369.99], [26.0, 0.5, 440.0], [26.5, 0.5, 369.99], [27.0, 0.5, 293.66], [27.5, 0.5, 369.99], [28.0, 0.5, 440.0], [28.5, 0.5, 369.99], [29.0, 0.5, 440.0], [29.5, 0.5, 369.99], [30.0, 0.5, 246.94], [30.5, 0.5, 311.13], [31.0, 0.5, 369.99], [31.5, 0.5, 311.13], [32.0, 0.5, 369.99], [32.5, 0.5, 311.13], [33.0, 0.5, 246.94], [33.5, 0.5, 311.13], [34.0, 0.5, 369.99], [34.5, 0.5, 311.13], [35.0, 0.5, 369.99], [35.5, 0.5, 311.13], [36.0, 0.5, 196.0], [36.5, 0.5, 246.94], [37.0, 0.5, 293.66], [37.5, 0.5, 246.94], [38.0, 0.5, 293.66], [38.5, 0.5, 246.94], [39.0, 0.5, 196.0], [39.5, 0.5, 233.08], [40.0, 0.5, 293.66], [40.5, 0.5, 233.08], [41.0, 0.5, 293.66], [41.5, 0.5, 233.08], [42.0, 0.5, 293.66], [42.5, 0.5, 369.99], [43.0, 0.5, 440.0], [43.5, 0.5, 369.99], [44.0, 0.5, 440.0], [44.5, 0.5, 369.99], [45.0, 0.5, 277.18], [45.5, 0.5, 329.63], [46.0, 0.5, 440.0], [46.5, 0.5, 329.63], [47.0, 0.5, 440.0], [47.5, 0.5, 329.63]];
+const BASS_NOTES: [number, number, number][] = [[0.0, 2.7, 146.83], [3.0, 2.7, 146.83], [6.0, 2.7, 123.47], [9.0, 2.7, 123.47], [12.0, 2.7, 98.0], [15.0, 2.7, 98.0], [18.0, 2.7, 146.83], [21.0, 2.7, 110.0], [24.0, 2.7, 146.83], [27.0, 2.7, 146.83], [30.0, 2.7, 123.47], [33.0, 2.7, 123.47], [36.0, 2.7, 98.0], [39.0, 2.7, 98.0], [42.0, 2.7, 146.83], [45.0, 2.7, 110.0]];
+
+function playLeadNote(
   ctx: AudioContext,
   dest: AudioNode,
-  freq: number,
+  echoDest: AudioNode | null,
   startTime: number,
-  duration: number,
-  type: OscillatorType,
-  vol: number
+  durationSec: number,
+  freq: number
+) {
+  const osc1 = ctx.createOscillator();
+  const gain1 = ctx.createGain();
+  osc1.type = "triangle";
+  osc1.frequency.setValueAtTime(freq, startTime);
+
+  gain1.gain.setValueAtTime(0.0001, startTime);
+  gain1.gain.linearRampToValueAtTime(0.09, startTime + 0.015);
+  gain1.gain.exponentialRampToValueAtTime(0.0001, startTime + durationSec + 0.35);
+
+  osc1.connect(gain1);
+  gain1.connect(dest);
+  if (echoDest) gain1.connect(echoDest);
+
+  osc1.start(startTime);
+  osc1.stop(startTime + durationSec + 0.4);
+  activeOscillators.push(osc1);
+
+  const osc2 = ctx.createOscillator();
+  const gain2 = ctx.createGain();
+  osc2.type = "sine";
+  osc2.frequency.setValueAtTime(freq * 2, startTime);
+
+  gain2.gain.setValueAtTime(0.0001, startTime);
+  gain2.gain.linearRampToValueAtTime(0.035, startTime + 0.008);
+  gain2.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18);
+
+  osc2.connect(gain2);
+  gain2.connect(dest);
+  if (echoDest) gain2.connect(echoDest);
+
+  osc2.start(startTime);
+  osc2.stop(startTime + 0.22);
+  activeOscillators.push(osc2);
+}
+
+function playArpNote(
+  ctx: AudioContext,
+  dest: AudioNode,
+  startTime: number,
+  durationSec: number,
+  freq: number
 ) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-
-  osc.type = type;
+  osc.type = "sine";
   osc.frequency.setValueAtTime(freq, startTime);
 
-  // Envolvente de sonido suave (suave al inicio, caída melancólica estilo caja de música)
   gain.gain.setValueAtTime(0.0001, startTime);
-  gain.gain.exponentialRampToValueAtTime(vol, startTime + 0.04);
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  gain.gain.linearRampToValueAtTime(0.038, startTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.max(durationSec, 0.55));
 
   osc.connect(gain);
   gain.connect(dest);
 
   osc.start(startTime);
-  osc.stop(startTime + duration + 0.05);
+  osc.stop(startTime + Math.max(durationSec, 0.55) + 0.05);
+  activeOscillators.push(osc);
 }
 
-const { totalDuration, events } = createMelodyEvents();
+function playBassNote(
+  ctx: AudioContext,
+  dest: AudioNode,
+  startTime: number,
+  durationSec: number,
+  freq: number
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(freq, startTime);
 
-function scheduleLoop(ctx: AudioContext, dest: AudioNode, startAt: number) {
-  if (!isPlaying) return;
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.linearRampToValueAtTime(0.045, startTime + 0.06);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + durationSec);
 
-  const now = startAt;
-  for (const [freq, offset, dur, type, vol] of events) {
-    playNote(ctx, dest, freq, now + offset, dur, type, vol);
+  osc.connect(gain);
+  gain.connect(dest);
+
+  osc.start(startTime);
+  osc.stop(startTime + durationSec + 0.05);
+  activeOscillators.push(osc);
+}
+
+function scheduleLoop(ctx: AudioContext, startAt: number) {
+  if (!isPlaying || !bgmMasterGain) return;
+
+  for (const [beat, dur, freq] of LEAD_NOTES) {
+    const noteStart = startAt + beat * BEAT_SEC;
+    if (noteStart >= ctx.currentTime - 0.1) {
+      playLeadNote(ctx, bgmMasterGain, delayNode, noteStart, dur * BEAT_SEC, freq);
+    }
   }
 
-  // Programar la siguiente repetición
-  const nextLoopTime = (now + totalDuration - ctx.currentTime) * 1000 - 150;
+  for (const [beat, dur, freq] of ARP_NOTES) {
+    const noteStart = startAt + beat * BEAT_SEC;
+    if (noteStart >= ctx.currentTime - 0.1) {
+      playArpNote(ctx, bgmMasterGain, noteStart, dur * BEAT_SEC, freq);
+    }
+  }
+
+  for (const [beat, dur, freq] of BASS_NOTES) {
+    const noteStart = startAt + beat * BEAT_SEC;
+    if (noteStart >= ctx.currentTime - 0.1) {
+      playBassNote(ctx, bgmMasterGain, noteStart, dur * BEAT_SEC, freq);
+    }
+  }
+
+  const nextLoopTime = startAt + TOTAL_DURATION;
+  const delayToNextMs = Math.max((nextLoopTime - ctx.currentTime - 0.4) * 1000, 500);
+
   loopTimeout = setTimeout(() => {
     if (isPlaying) {
-      scheduleLoop(ctx, dest, ctx.currentTime + 0.1);
+      scheduleLoop(ctx, nextLoopTime);
     }
-  }, Math.max(nextLoopTime, 1000));
+  }, delayToNextMs);
 }
 
-// Iniciar música melancólica
+function playImmediate(ctx: AudioContext) {
+  if (isPlaying) return;
+  isPlaying = true;
+
+  if (bgmMasterGain) {
+    try {
+      bgmMasterGain.gain.cancelScheduledValues(ctx.currentTime);
+      bgmMasterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      bgmMasterGain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.4);
+    } catch {}
+  }
+
+  scheduleLoop(ctx, ctx.currentTime + 0.08);
+}
+
 export function startBgm() {
-  if (typeof window === "undefined" || isPlaying) return;
+  if (typeof window === "undefined" || isMuted()) return;
 
-  try {
-    audioCtx ??= new AudioContext();
-    if (audioCtx.state === "suspended") {
-      void audioCtx.resume();
-    }
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
 
-    bgmGain ??= audioCtx.createGain();
-    // Volumen de fondo bajo (0.28 maestro = muy sutil, nunca opaca los SFX)
-    bgmGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    bgmGain.connect(audioCtx.destination);
+  setupAudioGraph(ctx);
 
-    isPlaying = true;
-    scheduleLoop(audioCtx, bgmGain, audioCtx.currentTime + 0.1);
-  } catch {}
+  if (ctx.state === "suspended") {
+    const unlockAndStart = () => {
+      void ctx.resume().then(() => {
+        if (!isMuted() && !isPlaying) {
+          playImmediate(ctx);
+        }
+      });
+      events.forEach((ev) => window.removeEventListener(ev, unlockAndStart));
+    };
+
+    const events = ["pointerdown", "click", "touchstart", "touchend", "keydown"];
+    events.forEach((ev) =>
+      window.addEventListener(ev, unlockAndStart, { passive: true, once: true })
+    );
+
+    void ctx.resume().then(() => {
+      if (ctx.state === "running" && !isMuted() && !isPlaying) {
+        events.forEach((ev) => window.removeEventListener(ev, unlockAndStart));
+        playImmediate(ctx);
+      }
+    });
+    return;
+  }
+
+  if (!isPlaying) {
+    playImmediate(ctx);
+  }
 }
 
-// Detener música
 export function stopBgm() {
   isPlaying = false;
   if (loopTimeout) {
     clearTimeout(loopTimeout);
     loopTimeout = null;
   }
-  if (bgmGain && audioCtx) {
+
+  if (bgmMasterGain && sharedAudioCtx) {
     try {
-      // Fade out suave de 0.5s en lugar de cortar en seco
-      bgmGain.gain.setValueAtTime(bgmGain.gain.value, audioCtx.currentTime);
-      bgmGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+      const t = sharedAudioCtx.currentTime;
+      bgmMasterGain.gain.cancelScheduledValues(t);
+      bgmMasterGain.gain.setValueAtTime(bgmMasterGain.gain.value, t);
+      bgmMasterGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
     } catch {}
   }
+
+  setTimeout(() => {
+    if (!isPlaying) {
+      activeOscillators.forEach((osc) => {
+        try {
+          osc.stop();
+          osc.disconnect();
+        } catch {}
+      });
+      activeOscillators = [];
+    }
+  }, 380);
 }
 
-// Ducking automático: baja el volumen de la música cuando suena un SFX importante
 export function duckBgm(duration = 0.5) {
-  if (!isPlaying || !bgmGain || !audioCtx) return;
+  if (!isPlaying || !bgmMasterGain || !sharedAudioCtx) return;
   try {
-    const t = audioCtx.currentTime;
-    bgmGain.gain.cancelScheduledValues(t);
-    // Baja el volumen al 20%
-    bgmGain.gain.setValueAtTime(0.06, t);
-    // Vuelve a subir suavemente
-    bgmGain.gain.exponentialRampToValueAtTime(0.3, t + duration);
+    const t = sharedAudioCtx.currentTime;
+    bgmMasterGain.gain.cancelScheduledValues(t);
+    bgmMasterGain.gain.setValueAtTime(bgmMasterGain.gain.value, t);
+    bgmMasterGain.gain.linearRampToValueAtTime(0.04, t + 0.04);
+    bgmMasterGain.gain.setValueAtTime(0.04, t + duration);
+    bgmMasterGain.gain.exponentialRampToValueAtTime(0.22, t + duration + 0.35);
   } catch {}
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (bgmMasterGain && sharedAudioCtx) {
+        try {
+          bgmMasterGain.gain.setValueAtTime(0.0001, sharedAudioCtx.currentTime);
+        } catch {}
+      }
+    } else {
+      if (!isMuted() && isPlaying && bgmMasterGain && sharedAudioCtx) {
+        try {
+          bgmMasterGain.gain.setValueAtTime(0.0001, sharedAudioCtx.currentTime);
+          bgmMasterGain.gain.exponentialRampToValueAtTime(0.22, sharedAudioCtx.currentTime + 0.4);
+        } catch {}
+      }
+    }
+  });
 }

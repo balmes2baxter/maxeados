@@ -11,17 +11,11 @@ const subscribe = (cb: () => void) => {
 };
 
 export function SoundToggle() {
-  const muted = useSyncExternalStore(subscribe, isMuted, () => true);
+  const muted = useSyncExternalStore(subscribe, isMuted, () => false);
 
   useEffect(() => {
     if (!muted) {
-      // Iniciar suavemente al primer toque de pantalla si el sonido está activo
-      const onFirstTouch = () => {
-        if (!isMuted()) startBgm();
-        window.removeEventListener("pointerdown", onFirstTouch);
-      };
-      window.addEventListener("pointerdown", onFirstTouch, { once: true });
-      return () => window.removeEventListener("pointerdown", onFirstTouch);
+      startBgm();
     } else {
       stopBgm();
     }
@@ -35,15 +29,15 @@ export function SoundToggle() {
         setMuted(next);
         window.dispatchEvent(new Event("px:mute"));
         if (!next) {
-          setTimeout(() => sfx("coin"), 0);
           startBgm();
+          setTimeout(() => sfx("coin"), 40);
         } else {
           stopBgm();
         }
       }}
       aria-label={muted ? "Activar sonido y música" : "Silenciar"}
-      className="lift-hover"
-      title={muted ? "Activar música y efectos" : "Silenciar"}
+      className="lift-hover inline-flex items-center justify-center p-1.5 rounded hover:bg-neutral-800 transition-colors"
+      title={muted ? "Activar música (Fallen Down) y efectos" : "Silenciar música y efectos"}
     >
       <PixelIcon name={muted ? "mute" : "sound"} size={18} />
     </button>

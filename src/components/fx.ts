@@ -40,14 +40,15 @@ export function toast(t: ToastInput) {
 }
 
 // ---------- Sonido ----------
-let ctx: AudioContext | null = null;
+import { duckBgm, getSharedAudioContext } from "@/lib/bgm";
+
 const MUTE_KEY = "maxeados:mute";
 
 export function isMuted() {
   try {
     return localStorage.getItem(MUTE_KEY) === "1";
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -57,8 +58,14 @@ export function setMuted(m: boolean) {
   } catch {}
 }
 
-function tone(freq: number, start: number, dur: number, type: OscillatorType = "square", vol = 0.05) {
-  if (!ctx) return;
+function tone(
+  ctx: AudioContext,
+  freq: number,
+  start: number,
+  dur: number,
+  type: OscillatorType = "square",
+  vol = 0.05
+) {
   const o = ctx.createOscillator();
   const g = ctx.createGain();
   o.type = type;
@@ -75,18 +82,27 @@ const SONGS: Record<string, [number, number, number][]> = {
   select: [[660, 0, 0.05], [990, 0.05, 0.07]],
   coin: [[988, 0, 0.08], [1319, 0.08, 0.25]],
   success: [[523, 0, 0.1], [659, 0.1, 0.1], [784, 0.2, 0.1], [1047, 0.3, 0.3]],
-  levelup: [[392, 0, 0.1], [523, 0.1, 0.1], [659, 0.2, 0.1], [784, 0.3, 0.1], [1047, 0.4, 0.12], [784, 0.52, 0.08], [1047, 0.6, 0.4]],
+  levelup: [
+    [392, 0, 0.1],
+    [523, 0.1, 0.1],
+    [659, 0.2, 0.1],
+    [784, 0.3, 0.1],
+    [1047, 0.4, 0.12],
+    [784, 0.52, 0.08],
+    [1047, 0.6, 0.4],
+  ],
   error: [[220, 0, 0.15], [165, 0.15, 0.3]],
 };
-
-import { duckBgm } from "@/lib/bgm";
 
 export function sfx(name: keyof typeof SONGS) {
   if (typeof window === "undefined" || isMuted()) return;
   try {
-    duckBgm(0.6);
-    ctx ??= new AudioContext();
-    if (ctx.state === "suspended") void ctx.resume();
-    for (const [f, s, d] of SONGS[name]) tone(f, s, d);
+    duckBgm(0.55);
+    const audioCtx = getSharedAudioContext();
+    if (!audioCtx) return;
+    if (audioCtx.state === "suspended") void audioCtx.resume();
+    for (const [f, s, d] of SONGS[name]) {
+      tone(audioCtx, f, s, d);
+    }
   } catch {}
 }
