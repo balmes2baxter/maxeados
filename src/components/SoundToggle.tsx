@@ -37,7 +37,7 @@ export function SoundToggle() {
       }}
       aria-label={muted ? "Activar sonido y música" : "Silenciar"}
       className="lift-hover inline-flex items-center justify-center p-1.5 rounded hover:bg-neutral-800 transition-colors"
-      title={muted ? "Activar música (Fallen Down) y efectos" : "Silenciar música y efectos"}
+      title={muted ? "Activar música (Piano triste) y efectos" : "Silenciar música y efectos"}
     >
       <PixelIcon name={muted ? "mute" : "sound"} size={18} />
     </button>
