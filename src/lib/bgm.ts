@@ -2,8 +2,8 @@
 
 // BGM: "Fallen Down" de Undertale (Toby Fox)
 // Síntesis Web Audio de Piano Acústico Melancólico (Sad Piano).
-// Sonido: Cuerdas de piano dobles desafinadas acústicamente (chorus natural),
-// envolvente dinámica de martillo de fieltro (lowpass sweep) y resonancia de caja armónica (Convolver Reverb).
+// Motor resiliente: Re-sincronización instantánea ante pausas de pantalla,
+// escucha permanente de gestos táctiles y recuperación automática ante suspensión de pestaña.
 // 0 KB de descarga externa.
 
 import { isMuted } from "@/components/fx";
@@ -20,7 +20,7 @@ let isPlaying = false;
 let loopTimeout: ReturnType<typeof setTimeout> | null = null;
 let activeOscillators: OscillatorNode[] = [];
 
-// Tempo melancólico y pausado de vals (86 BPM da ese aire nostálgico y reflexivo)
+// Tempo melancólico y pausado de vals (86 BPM)
 const BPM = 86;
 const BEAT_SEC = 60 / BPM; // ~0.6976s por pulso (compás 3/4)
 const TOTAL_BEATS = 48; // 16 compases
@@ -34,6 +34,13 @@ export function getSharedAudioContext(): AudioContext | null {
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (AudioCtx) {
       sharedAudioCtx = new AudioCtx();
+
+      // Cuando el estado cambie a running, si no está sonando y no está muteado, arrancar
+      sharedAudioCtx.onstatechange = () => {
+        if (sharedAudioCtx?.state === "running" && !isPlaying && !isMuted()) {
+          playImmediate(sharedAudioCtx);
+        }
+      };
     }
   }
   return sharedAudioCtx;
@@ -49,9 +56,7 @@ function createPianoRoomImpulse(ctx: AudioContext, duration = 2.0, decay = 2.6):
 
   for (let i = 0; i < length; i++) {
     const t = i / length;
-    // Caída exponencial natural
     const envelope = Math.exp(-t * decay);
-    // Amortiguación de frecuencias altas por la madera del piano
     const damp = 1.0 - t * 0.75;
     left[i] = (Math.random() * 2 - 1) * envelope * damp;
     right[i] = (Math.random() * 2 - 1) * envelope * damp;
@@ -64,7 +69,7 @@ function createPianoRoomImpulse(ctx: AudioContext, duration = 2.0, decay = 2.6):
 function setupAudioGraph(ctx: AudioContext) {
   if (bgmMasterGain) return;
 
-  // 1. Ganancia maestra del BGM (0.24 = presencia cálida y clara, nunca saturada)
+  // 1. Ganancia maestra del BGM (0.24 = presencia cálida y clara)
   bgmMasterGain = ctx.createGain();
   bgmMasterGain.gain.setValueAtTime(0.24, ctx.currentTime);
 
@@ -87,22 +92,17 @@ function setupAudioGraph(ctx: AudioContext) {
     convolverNode.buffer = createPianoRoomImpulse(ctx, 2.2, 2.8);
   } catch {}
 
-  // 5. Mezcla Wet / Dry (65% directo, 35% reverberación de sala)
+  // 5. Mezcla Wet / Dry (68% directo, 36% reverberación de sala)
   dryGainNode = ctx.createGain();
   dryGainNode.gain.setValueAtTime(0.68, ctx.currentTime);
 
   reverbGainNode = ctx.createGain();
   reverbGainNode.gain.setValueAtTime(0.36, ctx.currentTime);
 
-  // Conexiones:
-  // Salida directa -> Master
   dryGainNode.connect(masterWarmFilterNode);
-
-  // Convolver -> ReverbGain -> Master
   convolverNode.connect(reverbGainNode);
   reverbGainNode.connect(masterWarmFilterNode);
 
-  // Master -> Compresor -> Ganancia maestra -> Destino
   masterWarmFilterNode.connect(masterCompressorNode);
   masterCompressorNode.connect(bgmMasterGain);
   bgmMasterGain.connect(ctx.destination);
@@ -119,13 +119,12 @@ function playPianoString(
   startTime: number,
   durationSec: number,
   freq: number,
-  velocity: number, // 0.0 a 1.0
+  velocity: number,
   isMelody = false
 ) {
   if (!dryGainNode || !convolverNode) return;
 
-  // A. Filtro dinámico de martillo (Hammer Felt Filter):
-  // Al golpear la cuerda, el golpe tiene un ataque suave que decae rápido a un tono dulce y profundo.
+  // Filtro dinámico de martillo (Hammer Felt Filter):
   const hammerFilter = ctx.createBiquadFilter();
   hammerFilter.type = "lowpass";
   hammerFilter.Q.setValueAtTime(1.1, startTime);
@@ -141,25 +140,22 @@ function playPianoString(
   const peakVolume = (isMelody ? 0.085 : 0.045) * velocity;
 
   noteGain.gain.setValueAtTime(0.0001, startTime);
-  // Ataque de martillo: 0.008s para ataque orgánico, no seco ni sintético
   noteGain.gain.linearRampToValueAtTime(peakVolume, startTime + 0.008);
-  // Caída exponencial larga que imita la vibración de la cuerda con pedal de sustain
   const ringTime = isMelody ? durationSec + 0.75 : Math.max(durationSec, 0.85);
   noteGain.gain.exponentialRampToValueAtTime(0.0001, startTime + ringTime);
 
-  // B. Par de cuerdas dobles con micro-desafinación (Unison Detune):
-  // El secreto del sonido de piano real frente a un beeper de celular.
+  // Cuerdas dobles con micro-desafinación (Unison Detune):
   const oscA = ctx.createOscillator();
   oscA.type = "triangle";
   oscA.frequency.setValueAtTime(freq, startTime);
-  oscA.detune.setValueAtTime(-1.4, startTime); // -1.4 cents
+  oscA.detune.setValueAtTime(-1.4, startTime);
 
   const oscB = ctx.createOscillator();
   oscB.type = "triangle";
   oscB.frequency.setValueAtTime(freq, startTime);
-  oscB.detune.setValueAtTime(1.6, startTime); // +1.6 cents
+  oscB.detune.setValueAtTime(1.6, startTime);
 
-  // C. Armónico de golpe (Segundo armónico sutil para el brillo de la tecla)
+  // Armónico de golpe (Segundo armónico sutil):
   const oscHarmonic = ctx.createOscillator();
   const harmGain = ctx.createGain();
   oscHarmonic.type = "sine";
@@ -169,7 +165,6 @@ function playPianoString(
   harmGain.gain.linearRampToValueAtTime(peakVolume * 0.28, startTime + 0.006);
   harmGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.22);
 
-  // Conectar osciladores -> filtro de martillo -> ganancia de nota
   oscA.connect(hammerFilter);
   oscB.connect(hammerFilter);
   oscHarmonic.connect(harmGain);
@@ -177,11 +172,9 @@ function playPianoString(
 
   hammerFilter.connect(noteGain);
 
-  // Enviar hacia señal directa y hacia la sala con reverberación
   noteGain.connect(dryGainNode);
   noteGain.connect(convolverNode);
 
-  // Iniciar y programar parada
   const stopTime = startTime + ringTime + 0.05;
   oscA.start(startTime);
   oscA.stop(stopTime);
@@ -193,44 +186,53 @@ function playPianoString(
   activeOscillators.push(oscA, oscB, oscHarmonic);
 }
 
-// Programar ciclo de 16 compases de Fallen Down en estilo Piano Triste
+// Programar ciclo de 16 compases con AUTO-RESINCRONIZACIÓN
 function scheduleLoop(ctx: AudioContext, startAt: number) {
   if (!isPlaying || !bgmMasterGain) return;
 
-  // 1. Melodía nostálgica (mano derecha del piano)
+  // CORRECCIÓN CLAVE: Si startAt quedó en el pasado por cambio de pestaña o bloqueo del teléfono:
+  // Re-sincronizar inmediatamente al tiempo actual de audio para que no reproduzca silencio.
+  let currentStart = startAt;
+  if (currentStart < ctx.currentTime - 0.2) {
+    currentStart = ctx.currentTime + 0.05;
+  }
+
+  // Limpiar osciladores viejos
+  if (activeOscillators.length > 120) {
+    activeOscillators = activeOscillators.slice(-60);
+  }
+
+  // 1. Melodía nostálgica
   for (const [beat, dur, freq] of LEAD_NOTES) {
-    const noteStart = startAt + beat * BEAT_SEC;
-    if (noteStart >= ctx.currentTime - 0.1) {
-      // Variación dinámica humana según el tiempo del compás
+    const noteStart = currentStart + beat * BEAT_SEC;
+    if (noteStart >= ctx.currentTime - 0.05) {
       const isDownbeat = beat % 3 === 0;
       const vel = isDownbeat ? 0.88 : 0.74;
       playPianoString(ctx, noteStart, dur * BEAT_SEC, freq, vel, true);
     }
   }
 
-  // 2. Acompañamiento arpegiado (mano izquierda, arpegios suaves y fluidos)
+  // 2. Acompañamiento arpegiado
   for (const [beat, dur, freq] of ARP_NOTES) {
-    const noteStart = startAt + beat * BEAT_SEC;
-    if (noteStart >= ctx.currentTime - 0.1) {
-      // Arpegios más suaves para no opacar la melodía
-      const vel = 0.42;
-      playPianoString(ctx, noteStart, dur * BEAT_SEC, freq, vel, false);
+    const noteStart = currentStart + beat * BEAT_SEC;
+    if (noteStart >= ctx.currentTime - 0.05) {
+      playPianoString(ctx, noteStart, dur * BEAT_SEC, freq, 0.42, false);
     }
   }
 
-  // 3. Bajos profundos en el primer pulso de cada acorde
+  // 3. Bajos profundos
   for (const [beat, dur, freq] of BASS_NOTES) {
-    const noteStart = startAt + beat * BEAT_SEC;
-    if (noteStart >= ctx.currentTime - 0.1) {
-      const vel = 0.58;
-      playPianoString(ctx, noteStart, dur * BEAT_SEC, freq, vel, false);
+    const noteStart = currentStart + beat * BEAT_SEC;
+    if (noteStart >= ctx.currentTime - 0.05) {
+      playPianoString(ctx, noteStart, dur * BEAT_SEC, freq, 0.58, false);
     }
   }
 
   // Programar repetición continua perfecta
-  const nextLoopTime = startAt + TOTAL_DURATION;
-  const delayToNextMs = Math.max((nextLoopTime - ctx.currentTime - 0.5) * 1000, 500);
+  const nextLoopTime = currentStart + TOTAL_DURATION;
+  const delayToNextMs = Math.max((nextLoopTime - ctx.currentTime - 0.6) * 1000, 500);
 
+  if (loopTimeout) clearTimeout(loopTimeout);
   loopTimeout = setTimeout(() => {
     if (isPlaying) {
       scheduleLoop(ctx, nextLoopTime);
@@ -239,20 +241,21 @@ function scheduleLoop(ctx: AudioContext, startAt: number) {
 }
 
 function playImmediate(ctx: AudioContext) {
-  if (isPlaying) return;
+  if (isMuted()) return;
   isPlaying = true;
 
   if (bgmMasterGain) {
     try {
       bgmMasterGain.gain.cancelScheduledValues(ctx.currentTime);
       bgmMasterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      bgmMasterGain.gain.exponentialRampToValueAtTime(0.24, ctx.currentTime + 0.5);
+      bgmMasterGain.gain.exponentialRampToValueAtTime(0.24, ctx.currentTime + 0.4);
     } catch {}
   }
 
   scheduleLoop(ctx, ctx.currentTime + 0.08);
 }
 
+// Iniciar música melancólica
 export function startBgm() {
   if (typeof window === "undefined" || isMuted()) return;
 
@@ -261,35 +264,21 @@ export function startBgm() {
 
   setupAudioGraph(ctx);
 
-  if (ctx.state === "suspended") {
-    const unlockAndStart = () => {
-      void ctx.resume().then(() => {
-        if (!isMuted() && !isPlaying) {
-          playImmediate(ctx);
-        }
-      });
-      events.forEach((ev) => window.removeEventListener(ev, unlockAndStart));
-    };
-
-    const events = ["pointerdown", "click", "touchstart", "touchend", "keydown"];
-    events.forEach((ev) =>
-      window.addEventListener(ev, unlockAndStart, { passive: true, once: true })
-    );
-
+  if (ctx.state === "suspended" || (ctx.state as string) === "interrupted") {
     void ctx.resume().then(() => {
-      if (ctx.state === "running" && !isMuted() && !isPlaying) {
-        events.forEach((ev) => window.removeEventListener(ev, unlockAndStart));
+      if (ctx.state === "running" && !isMuted()) {
         playImmediate(ctx);
       }
     });
     return;
   }
 
-  if (!isPlaying) {
+  if (ctx.state === "running" && !isPlaying) {
     playImmediate(ctx);
   }
 }
 
+// Detener música con fade suave
 export function stopBgm() {
   isPlaying = false;
   if (loopTimeout) {
@@ -302,7 +291,7 @@ export function stopBgm() {
       const t = sharedAudioCtx.currentTime;
       bgmMasterGain.gain.cancelScheduledValues(t);
       bgmMasterGain.gain.setValueAtTime(bgmMasterGain.gain.value, t);
-      bgmMasterGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      bgmMasterGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
     } catch {}
   }
 
@@ -316,24 +305,52 @@ export function stopBgm() {
       });
       activeOscillators = [];
     }
-  }, 450);
+  }, 350);
 }
 
+// Ducking automático: baja el piano cuando suena un SFX
 export function duckBgm(duration = 0.5) {
   if (!isPlaying || !bgmMasterGain || !sharedAudioCtx) return;
   try {
     const t = sharedAudioCtx.currentTime;
     bgmMasterGain.gain.cancelScheduledValues(t);
     bgmMasterGain.gain.setValueAtTime(bgmMasterGain.gain.value, t);
-    // Baja el piano a 0.04 rápidamente para dejar espacio al SFX
     bgmMasterGain.gain.linearRampToValueAtTime(0.04, t + 0.04);
     bgmMasterGain.gain.setValueAtTime(0.04, t + duration);
-    // Recupera la calidez del piano suavemente
-    bgmMasterGain.gain.exponentialRampToValueAtTime(0.24, t + duration + 0.4);
+    bgmMasterGain.gain.exponentialRampToValueAtTime(0.24, t + duration + 0.35);
   } catch {}
 }
 
-if (typeof document !== "undefined") {
+// REANIMACIÓN AUTOMÁTICA ANTE CUALQUIER GESTO DEL USUARIO:
+// Garantiza que la música NUNCA quede silenciada si el navegador suspende el hilo de audio.
+function autoResumeAudio() {
+  if (isMuted()) return;
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+
+  setupAudioGraph(ctx);
+
+  if (ctx.state === "suspended" || (ctx.state as string) === "interrupted") {
+    void ctx.resume().then(() => {
+      if (ctx.state === "running" && !isMuted() && !isPlaying) {
+        playImmediate(ctx);
+      }
+    });
+  } else if (ctx.state === "running" && !isPlaying && !isMuted()) {
+    playImmediate(ctx);
+  }
+}
+
+// Listeners globales permanentes (activos durante toda la sesión)
+if (typeof window !== "undefined") {
+  // 1. Cualquier interacción táctil o clic reactiva el audio si estaba dormido
+  const GESTURE_EVENTS = ["click", "touchstart", "touchend", "pointerup", "keydown"];
+  GESTURE_EVENTS.forEach((evt) => {
+    window.addEventListener(evt, autoResumeAudio, { passive: true });
+  });
+
+  // 2. Al regresar a la pestaña o enfocar la app
+  window.addEventListener("focus", autoResumeAudio);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       if (bgmMasterGain && sharedAudioCtx) {
@@ -342,12 +359,14 @@ if (typeof document !== "undefined") {
         } catch {}
       }
     } else {
-      if (!isMuted() && isPlaying && bgmMasterGain && sharedAudioCtx) {
-        try {
-          bgmMasterGain.gain.setValueAtTime(0.0001, sharedAudioCtx.currentTime);
-          bgmMasterGain.gain.exponentialRampToValueAtTime(0.24, sharedAudioCtx.currentTime + 0.4);
-        } catch {}
-      }
+      autoResumeAudio();
     }
   });
+
+  // 3. Perro guardián (watchdog): revisa cada 3s que si no está silenciado y la pantalla está abierta, esté sonando
+  setInterval(() => {
+    if (typeof document !== "undefined" && !document.hidden && !isMuted()) {
+      autoResumeAudio();
+    }
+  }, 3000);
 }
